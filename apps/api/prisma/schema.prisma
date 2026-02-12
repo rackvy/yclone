@@ -1,0 +1,489 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserStatus {
+  active
+  disabled
+}
+
+enum EmployeeStatus {
+  active
+  terminated
+}
+
+enum EmployeeRole {
+  admin
+  manager
+  master
+}
+
+enum AppointmentStatus {
+  new
+  confirmed
+  waiting
+  done
+  no_show
+  canceled
+}
+
+enum AppointmentType {
+  service
+  block
+}
+
+enum StockMovementType {
+  in
+  out
+  adjust
+  sale
+}
+
+model Company {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  branches           Branch[]
+  users              User[]
+  employees          Employee[]
+  clients            Client[]
+  masterRanks        MasterRank[]
+  services           Service[]
+  serviceCats        ServiceCategory[]
+  products           Product[]
+  productCats        ProductCategory[]
+  appointments       Appointment[]
+  StockMovement      StockMovement[]
+  scheduleRules      WorkScheduleRule[]
+  scheduleExceptions WorkScheduleException[]
+  scheduleBlocks     WorkScheduleBlock[]
+}
+
+model User {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  email        String? // можно логин по email или телефону
+  phone        String? // e.g. +79991234567
+  passwordHash String
+  status       UserStatus @default(active)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Связь с Employee (один к одному)
+  employee Employee?
+
+  // Множественная привязка к филиалам (для админов)
+  branches UserBranch[]
+
+  @@unique([companyId, email])
+  @@unique([companyId, phone])
+  @@index([companyId])
+}
+
+// Модель для множественной привязки User к Branch
+model UserBranch {
+  id        String  @id @default(cuid())
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  branchId  String
+  branch    Branch  @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, branchId])
+  @@index([branchId])
+}
+
+model Branch {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  name    String
+  address String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  employees      Employee[]
+  appointments   Appointment[]
+  products       Product[]
+  stockMovements StockMovement[]
+  userBranches   UserBranch[]
+
+  @@unique([companyId, name])
+  @@index([companyId])
+}
+
+model MasterRank {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  name     String // "Junior", "Top", ...
+  sort     Int     @default(100)
+  isActive Boolean @default(true)
+
+  employees Employee[]
+  prices    ServicePriceByRank[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([companyId, name])
+  @@index([companyId])
+}
+
+model Employee {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  branchId String
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  // Связь с User для входа в систему
+  userId String? @unique
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  role         EmployeeRole
+  status       EmployeeStatus @default(active)
+  fullName     String
+  phone        String?
+  email        String?
+  avatarKey    String? // ключ файла в S3 (или путь)
+  masterRankId String?
+  masterRank   MasterRank?  @relation(fields: [masterRankId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  scheduleRules      WorkScheduleRule[]
+  scheduleExceptions WorkScheduleException[]
+  scheduleBlocks     WorkScheduleBlock[]
+  appointments       Appointment[]           @relation("AppointmentMaster")
+  StockMovement      StockMovement[]
+  services           EmployeeService[]
+
+  @@unique([companyId, phone])
+  @@unique([companyId, email])
+  @@index([companyId])
+  @@index([branchId])
+  @@index([userId])
+}
+
+model Client {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  fullName String
+  phone    String
+  email    String?
+  notes    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  appointments Appointment[]
+
+  @@unique([companyId, phone])
+  @@index([companyId])
+}
+
+model ServiceCategory {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  name String
+  sort Int    @default(100)
+
+  services Service[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([companyId, name])
+  @@index([companyId])
+}
+
+model Service {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  categoryId String?
+  category   ServiceCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  name        String
+  durationMin Int // кратно 15, проверим на уровне приложения
+  isActive    Boolean @default(true)
+  sort        Int     @default(100)
+
+  pricesByRank     ServicePriceByRank[]
+  appointmentItems AppointmentService[]
+  employees        EmployeeService[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([companyId, name])
+  @@index([companyId])
+  @@index([categoryId])
+}
+
+model ServicePriceByRank {
+  id        String  @id @default(cuid())
+  serviceId String
+  service   Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  masterRankId String
+  masterRank   MasterRank @relation(fields: [masterRankId], references: [id], onDelete: Cascade)
+
+  price Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([serviceId, masterRankId])
+  @@index([masterRankId])
+  @@index([serviceId])
+}
+
+model EmployeeService {
+  id         String  @id @default(cuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  serviceId  String
+  service    Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([employeeId, serviceId])
+  @@index([serviceId])
+}
+
+model ProductCategory {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  name String
+  sort Int    @default(100)
+
+  products Product[]
+
+  @@unique([companyId, name])
+  @@index([companyId])
+}
+
+model Product {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  branchId String
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  categoryId String?
+  category   ProductCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  name     String
+  sku      String?
+  barcode  String?
+  price    Int
+  stockQty Int     @default(0)
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  stockMovements   StockMovement[]
+  appointmentItems AppointmentProduct[]
+
+  @@unique([branchId, sku])
+  @@unique([branchId, barcode])
+  @@index([companyId])
+  @@index([branchId])
+  @@index([categoryId])
+}
+
+model StockMovement {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  branchId String
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  type StockMovementType
+  qty  Int // положительное число; направление задаёт type
+  note String?
+
+  appointmentId String?
+  appointment   Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+
+  createdByEmployeeId String?
+  createdByEmployee   Employee? @relation(fields: [createdByEmployeeId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([companyId])
+  @@index([branchId])
+  @@index([productId])
+  @@index([appointmentId])
+}
+
+model Appointment {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  branchId String
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  type   AppointmentType   @default(service)
+  status AppointmentStatus @default(new)
+
+  // мастер, обязательный (и для блоков тоже, потому что блок относится к мастеру)
+  masterEmployeeId String
+  masterEmployee   Employee @relation("AppointmentMaster", fields: [masterEmployeeId], references: [id], onDelete: Cascade)
+
+  // клиент опционален: null для BLOCK, и можно оставить опциональным для SERVICE (если хочешь “черновики”)
+  clientId String?
+  client   Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+
+  title   String? // для BLOCK: "Перерыв", "Занят", ...
+  comment String?
+
+  startAt DateTime
+  endAt   DateTime
+
+  isPaid Boolean @default(false)
+
+  totalServices Int @default(0)
+  totalProducts Int @default(0)
+  total         Int @default(0)
+
+  services       AppointmentService[]
+  products       AppointmentProduct[]
+  stockMovements StockMovement[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId])
+  @@index([branchId])
+  @@index([masterEmployeeId])
+  @@index([clientId])
+  @@index([startAt])
+}
+
+model AppointmentService {
+  id            String      @id @default(cuid())
+  appointmentId String
+  appointment   Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  serviceId String
+  service   Service @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+
+  sortOrder   Int @default(100)
+  durationMin Int
+  price       Int
+
+  @@index([appointmentId])
+  @@index([serviceId])
+}
+
+model AppointmentProduct {
+  id            String      @id @default(cuid())
+  appointmentId String
+  appointment   Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  qty   Int
+  price Int
+  total Int
+
+  @@index([appointmentId])
+  @@index([productId])
+}
+
+model WorkScheduleRule {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  dayOfWeek    Int
+  isWorkingDay Boolean @default(true)
+  startTime    String?
+  endTime      String?
+
+  @@unique([employeeId, dayOfWeek])
+  @@index([companyId])
+  @@index([employeeId])
+}
+
+model WorkScheduleException {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  date         DateTime
+  isWorkingDay Boolean  @default(false)
+  startTime    String?
+  endTime      String?
+
+  @@unique([employeeId, date])
+  @@index([companyId])
+  @@index([employeeId])
+}
+
+model WorkScheduleBlock {
+  id         String   @id @default(cuid())
+  companyId  String
+  company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  date      DateTime
+  startTime String // "HH:MM" - начало блокировки (перерыва)
+  endTime   String // "HH:MM" - конец блокировки (перерыва)
+  reason    String? // причина перерыва
+
+  createdAt DateTime @default(now())
+
+  @@index([companyId])
+  @@index([employeeId])
+  @@index([employeeId, date])
+}
