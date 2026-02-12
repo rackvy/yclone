@@ -41,4 +41,4 @@ EXPOSE 4000
 
 # Реальный DATABASE_URL придёт из env_file при docker compose up
 # Миграции пока не трогаем (по желанию включишь позже)
-CMD ["node", "dist/main.js"]
+CMD ["node", "dist/src/main.js"]
