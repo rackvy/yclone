@@ -11,7 +11,10 @@ RUN pnpm install --frozen-lockfile
 
 COPY . .
 
-# ВАЖНО: prisma generate ДО nest build
+# build-time DATABASE_URL для prisma generate
+ARG DATABASE_URL
+ENV DATABASE_URL=$DATABASE_URL
+
 RUN pnpm prisma generate
 RUN pnpm build
 
@@ -34,6 +37,4 @@ COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/generated ./generated
 
 EXPOSE 4000
-
-# Без авто-миграций (ты их сделаешь руками)
 CMD ["node", "dist/main.js"]
