@@ -12,12 +12,18 @@ RUN pnpm install --frozen-lockfile
 COPY . .
 
 # Prisma config требует DATABASE_URL даже для generate.
-# Генерации не нужен реальный коннект, даём валидный "фейковый" URL.
+# Для generate не нужен реальный коннект — даём валидный фейк.
 ENV DATABASE_URL="postgresql://user:pass@localhost:5432/db?schema=public"
 
-# СНАЧАЛА generate (для TS типов), ПОТОМ build
+# 1) Генерим client в /app/generated/...
 RUN pnpm prisma generate
+
+# 2) Собираем Nest (получится /app/dist/src/...)
 RUN pnpm build
+
+# 3) КЛЮЧ: кладём generated внутрь dist, чтобы ../../generated работало из dist/src/*
+RUN mkdir -p /app/dist/generated \
+  && cp -R /app/generated/prisma /app/dist/generated/prisma
 
 # ====== production stage ======
 FROM node:20-alpine AS runner
@@ -33,12 +39,10 @@ RUN corepack prepare pnpm@latest --activate
 COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --prod --frozen-lockfile
 
+# Копируем только dist (внутри уже есть dist/generated)
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/generated ./generated
 
 EXPOSE 4000
 
-# Реальный DATABASE_URL придёт из env_file при docker compose up
-# Миграции пока не трогаем (по желанию включишь позже)
 CMD ["node", "dist/src/main.js"]
