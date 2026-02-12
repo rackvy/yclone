@@ -3,13 +3,18 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Ставим зависимости (строго по lock)
-COPY package*.json ./
-RUN npm ci
+# Устанавливаем pnpm
+RUN corepack enable
+RUN corepack prepare pnpm@latest --activate
 
-# Копируем исходники и собираем
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
+
 COPY . .
-RUN npm run build
+RUN pnpm build
+
+# Генерим Prisma client
+RUN pnpm prisma generate
 
 # ====== production stage ======
 FROM node:20-alpine AS runner
@@ -17,18 +22,18 @@ FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
-# Ставим только production зависимости
-COPY package*.json ./
-RUN npm ci --omit=dev
+RUN apk add --no-cache openssl
+RUN corepack enable
+RUN corepack prepare pnpm@latest --activate
 
-# Забираем build-артефакты
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --prod --frozen-lockfile
+
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/prisma ./prisma
 
-# Если у тебя Prisma — раскомментируй 2 строки ниже
-# COPY --from=builder /app/prisma ./prisma
-# RUN npx prisma generate
+RUN pnpm prisma generate
 
-# Порт внутри контейнера (должен совпадать с traefik service port)
 EXPOSE 4000
 
-CMD ["node", "dist/main.js"]
+CMD ["sh", "-lc", "pnpm prisma migrate deploy && node dist/main.js"]
