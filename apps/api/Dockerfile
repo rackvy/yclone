@@ -11,11 +11,7 @@ RUN pnpm install --frozen-lockfile
 
 COPY . .
 
-# build-time DATABASE_URL для prisma generate
-ARG DATABASE_URL
-ENV DATABASE_URL=$DATABASE_URL
-
-RUN pnpm prisma generate
+# ВАЖНО: НЕ делаем prisma generate здесь
 RUN pnpm build
 
 # ====== production stage ======
@@ -37,4 +33,7 @@ COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/generated ./generated
 
 EXPOSE 4000
-CMD ["node", "dist/main.js"]
+
+# 🔥 Prisma generate + migrate уже при runtime,
+# когда env из .env.production доступен
+CMD ["sh", "-lc", "pnpm prisma generate && node dist/main.js"]
