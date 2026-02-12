@@ -8,6 +8,9 @@ import { masterRanksApi, MasterRank } from '../api/masterRanks';
 interface ServiceInfo {
   id: string;
   name: string;
+  durationMin?: number;
+  pricesByRank?: { masterRankId: string; price: number }[];
+  category?: { id: string; name: string };
 }
 
 interface EmployeeFormData {
@@ -86,7 +89,12 @@ export default function EmployeesPage() {
       
       setEmployees(filteredEmps);
       setBranches(branchesData);
-      setServices(servicesData.map(s => ({ id: s.id, name: s.name })));
+      setServices(servicesData.map(s => ({ 
+        id: s.id, 
+        name: s.name,
+        durationMin: s.durationMin,
+        pricesByRank: s.pricesByRank.map(p => ({ masterRankId: p.masterRankId, price: p.price }))
+      })));
       setMasterRanks(ranksData);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Ошибка загрузки');
@@ -297,7 +305,7 @@ export default function EmployeesPage() {
         {/* Right side - Employee details */}
         <div className="flex-1 bg-gray-50 overflow-y-auto">
           {selectedEmployee ? (
-            <div className="p-6 max-w-4xl">
+            <div className="p-6 max-w-5xl">
               {/* Employee header */}
               <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 mb-6">
                 <div className="flex items-start justify-between">
@@ -367,6 +375,14 @@ export default function EmployeesPage() {
                     <div className="grid grid-cols-2 gap-3">
                       {services.map((service) => {
                         const isSelected = employeeServices.some(s => s.id === service.id);
+                        // Get price for employee's rank
+                        let price: number | null = null;
+                        if (isSelected && service.pricesByRank && selectedEmployee.masterRankId) {
+                          const priceByRank = service.pricesByRank.find(
+                            p => p.masterRankId === selectedEmployee.masterRankId
+                          );
+                          price = priceByRank?.price ?? null;
+                        }
                         return (
                           <button
                             key={service.id}
@@ -377,13 +393,25 @@ export default function EmployeesPage() {
                                 : 'border-gray-200 hover:border-gray-300'
                             }`}
                           >
-                            <div className="flex items-center gap-2">
-                              <div className={`w-5 h-5 rounded border flex items-center justify-center ${
+                            <div className="flex items-start gap-2">
+                              <div className={`w-5 h-5 rounded border flex items-center justify-center shrink-0 mt-0.5 ${
                                 isSelected ? 'bg-primary border-primary' : 'border-gray-300'
                               }`}>
                                 {isSelected && <span className="material-symbols-outlined text-white text-sm">check</span>}
                               </div>
-                              <span className="font-medium text-sm">{service.name}</span>
+                              <div className="flex-1 min-w-0">
+                                <span className="font-medium text-sm block">{service.name}</span>
+                                {isSelected && price !== null && (
+                                  <span className="text-sm text-primary font-semibold">
+                                    {price.toLocaleString('ru-RU')} ₽
+                                  </span>
+                                )}
+                                {isSelected && service.durationMin && (
+                                  <span className="text-xs text-gray-500 ml-2">
+                                    {service.durationMin} мин
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </button>
                         );

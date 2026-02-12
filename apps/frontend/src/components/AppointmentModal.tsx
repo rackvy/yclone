@@ -79,9 +79,9 @@ export function AppointmentModal({
     clientName: '',
     clientPhone: '',
     clientEmail: '',
-    employeeId: selectedEmployeeId || '',
+    employeeId: '',
     date: formatDateYYYYMMDD(selectedDate),
-    startTime: selectedTime || '10:00',
+    startTime: '10:00',
     endTime: '',
     status: 'waiting',
     services: [],
@@ -89,6 +89,18 @@ export function AppointmentModal({
     comment: '',
     addedById: '',
   });
+  
+  // Update form when modal opens with selected employee/time
+  useEffect(() => {
+    if (isOpen) {
+      setFormData(prev => ({
+        ...prev,
+        employeeId: selectedEmployeeId || prev.employeeId,
+        startTime: selectedTime || prev.startTime,
+        date: formatDateYYYYMMDD(selectedDate),
+      }));
+    }
+  }, [isOpen, selectedEmployeeId, selectedTime, selectedDate]);
 
   // Search states
   const [clientSearch, setClientSearch] = useState('');

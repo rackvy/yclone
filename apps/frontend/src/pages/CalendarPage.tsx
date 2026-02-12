@@ -6,6 +6,7 @@ import { branchesApi, Branch } from '../api/branches';
 import { employeesApi, Employee } from '../api/employees';
 import { appointmentsApi, Appointment, getStatusLabel, getStatusColor, getStatusBadgeColor } from '../api/appointments';
 import { clientsApi } from '../api/clients';
+import { scheduleApi, WorkScheduleRule, WorkScheduleException, WorkScheduleBlock } from '../api/schedule';
 import { formatDateYYYYMMDD, formatTime } from '../utils/date';
 
 const HOURS = Array.from({ length: 15 }, (_, i) => i + 9); // 09:00 - 23:00
@@ -15,6 +16,9 @@ export function CalendarPage() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [scheduleRules, setScheduleRules] = useState<Record<string, WorkScheduleRule[]>>({});
+  const [scheduleExceptions, setScheduleExceptions] = useState<Record<string, WorkScheduleException[]>>({});
+  const [scheduleBlocks, setScheduleBlocks] = useState<Record<string, WorkScheduleBlock[]>>({});
   const [selectedBranchId, setSelectedBranchId] = useState<string>('');
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
     const savedDate = localStorage.getItem('calendarDate');
@@ -89,11 +93,45 @@ export function CalendarPage() {
       );
       setEmployees(filteredEmployees);
       setAppointments(apps);
+      
+      // Load schedule for each employee
+      await loadSchedules(filteredEmployees);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Ошибка загрузки данных');
     } finally {
       setLoading(false);
     }
+  };
+  
+  const loadSchedules = async (emps: Employee[]) => {
+    const dateStr = formatDateYYYYMMDD(selectedDate);
+    const rules: Record<string, WorkScheduleRule[]> = {};
+    const exceptions: Record<string, WorkScheduleException[]> = {};
+    const blocks: Record<string, WorkScheduleBlock[]> = {};
+    
+    await Promise.all(
+      emps.map(async (emp) => {
+        try {
+          const [rulesRes, exceptionsRes, blocksRes] = await Promise.all([
+            scheduleApi.getRules(emp.id),
+            scheduleApi.getExceptions(emp.id, dateStr, dateStr),
+            scheduleApi.getBlocks(emp.id, dateStr, dateStr),
+          ]);
+          rules[emp.id] = rulesRes.days;
+          exceptions[emp.id] = exceptionsRes.items;
+          blocks[emp.id] = blocksRes.blocks;
+        } catch (err) {
+          console.error(`Failed to load schedule for ${emp.id}:`, err);
+          rules[emp.id] = [];
+          exceptions[emp.id] = [];
+          blocks[emp.id] = [];
+        }
+      })
+    );
+    
+    setScheduleRules(rules);
+    setScheduleExceptions(exceptions);
+    setScheduleBlocks(blocks);
   };
 
   const dateStr = useMemo(() => {
@@ -119,6 +157,79 @@ export function CalendarPage() {
   // Get appointments for specific employee
   const getEmployeeAppointments = (employeeId: string) => {
     return appointments.filter(a => a.masterEmployeeId === employeeId);
+  };
+  
+  // Check if employee is working on selected date
+  const isEmployeeWorking = (employeeId: string): boolean => {
+    const dayOfWeek = selectedDate.getDay();
+    const rules = scheduleRules[employeeId] || [];
+    const exceptions = scheduleExceptions[employeeId] || [];
+    
+    // Check exceptions first (override rules)
+    const exception = exceptions.find(e => e.date === formatDateYYYYMMDD(selectedDate));
+    if (exception) {
+      return exception.isWorkingDay;
+    }
+    
+    // Check rules
+    const rule = rules.find(r => r.dayOfWeek === dayOfWeek);
+    if (rule) {
+      return rule.isWorkingDay;
+    }
+    
+    // Default: working day
+    return true;
+  };
+  
+  // Get working hours for employee
+  const getEmployeeWorkingHours = (employeeId: string): { start: number; end: number } | null => {
+    const dayOfWeek = selectedDate.getDay();
+    const rules = scheduleRules[employeeId] || [];
+    const exceptions = scheduleExceptions[employeeId] || [];
+    
+    let startTime: string | null = null;
+    let endTime: string | null = null;
+    
+    // Check exceptions first
+    const exception = exceptions.find(e => e.date === formatDateYYYYMMDD(selectedDate));
+    if (exception && exception.isWorkingDay) {
+      startTime = exception.startTime;
+      endTime = exception.endTime;
+    } else if (!exception) {
+      // Check rules
+      const rule = rules.find(r => r.dayOfWeek === dayOfWeek);
+      if (rule && rule.isWorkingDay) {
+        startTime = rule.startTime;
+        endTime = rule.endTime;
+      }
+    }
+    
+    if (!startTime || !endTime) return null;
+    
+    const [startH, startM] = startTime.split(':').map(Number);
+    const [endH, endM] = endTime.split(':').map(Number);
+    
+    return {
+      start: startH + startM / 60,
+      end: endH + endM / 60,
+    };
+  };
+  
+  // Get blocks (breaks) for employee
+  const getEmployeeBlocks = (employeeId: string): WorkScheduleBlock[] => {
+    return scheduleBlocks[employeeId] || [];
+  };
+  
+  // Check if time slot is blocked (break)
+  const isTimeBlocked = (employeeId: string, hour: number): boolean => {
+    const blocks = getEmployeeBlocks(employeeId);
+    return blocks.some(block => {
+      const [startH, startM] = block.startTime.split(':').map(Number);
+      const [endH, endM] = block.endTime.split(':').map(Number);
+      const blockStart = startH + startM / 60;
+      const blockEnd = endH + endM / 60;
+      return hour >= blockStart && hour < blockEnd;
+    });
   };
 
   // Calculate position for appointment card
@@ -181,6 +292,24 @@ export function CalendarPage() {
   }, [appointments]);
 
   const selectedBranch = branches.find(b => b.id === selectedBranchId);
+  
+  // Handle cell click for quick appointment booking
+  const handleCellClick = (employeeId: string, hour: number) => {
+    // Check if employee is working
+    if (!isEmployeeWorking(employeeId)) {
+      return; // Don't open modal on day off
+    }
+    
+    // Check if time is blocked (break)
+    if (isTimeBlocked(employeeId, hour)) {
+      return; // Don't open modal during break
+    }
+    
+    const timeStr = `${String(hour).padStart(2, '0')}:00`;
+    setSelectedEmployeeId(employeeId);
+    setSelectedTime(timeStr);
+    setIsModalOpen(true);
+  };
 
   // Drag & Drop handlers
   const handleDragStart = (e: React.DragEvent, app: Appointment) => {
@@ -355,23 +484,30 @@ export function CalendarPage() {
             <div className="flex">
               {/* Time column header */}
               <div className="w-16 border-r border-gray-200 bg-gray-50/50 shrink-0"></div>
-              {/* Employee columns */}
-              {employees.map(emp => (
-                <div key={emp.id} className="flex-1 min-w-[200px] border-r border-gray-200 p-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm">
-                      {emp.fullName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-bold truncate">{emp.fullName}</p>
-                      <p className="text-[9px] text-gray-500 uppercase tracking-widest">Мастер</p>
+              {/* Employee columns - filter only working employees */}
+              {employees.filter(emp => isEmployeeWorking(emp.id)).map(emp => {
+                const workingHours = getEmployeeWorkingHours(emp.id);
+                return (
+                  <div key={emp.id} className="flex-1 min-w-[200px] border-r border-gray-200 p-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm">
+                        {emp.fullName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold truncate">{emp.fullName}</p>
+                        <p className="text-[9px] text-gray-500 uppercase tracking-widest">
+                          {workingHours 
+                            ? `${String(Math.floor(workingHours.start)).padStart(2, '0')}:00 - ${String(Math.floor(workingHours.end)).padStart(2, '0')}:00`
+                            : 'Мастер'}
+                        </p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-              {employees.length === 0 && (
+                );
+              })}
+              {employees.filter(emp => isEmployeeWorking(emp.id)).length === 0 && (
                 <div className="flex-1 p-3 text-center text-gray-500 text-sm">
-                  Нет активных сотрудников
+                  Нет работающих сотрудников на эту дату
                 </div>
               )}
             </div>
@@ -426,9 +562,11 @@ export function CalendarPage() {
                 })}
               </div>
 
-              {/* Employee Columns */}
-              {employees.map(emp => {
+              {/* Employee Columns - filter only working employees */}
+              {employees.filter(emp => isEmployeeWorking(emp.id)).map(emp => {
                 const empApps = getEmployeeAppointments(emp.id);
+                const workingHours = getEmployeeWorkingHours(emp.id);
+                const blocks = getEmployeeBlocks(emp.id);
                 return (
                   <div
                     key={emp.id}
@@ -438,13 +576,20 @@ export function CalendarPage() {
                     {HOURS.map((hour, index) => {
                       const isLast = index === HOURS.length - 1;
                       const isDragOver = dragOverCell?.employeeId === emp.id && dragOverCell?.hour === hour;
+                      const isBlocked = isTimeBlocked(emp.id, hour);
+                      const isOutsideWorkingHours = workingHours && (hour < workingHours.start || hour >= workingHours.end);
+                      
                       return (
                         <div
                           key={hour}
                           className={`relative border-b border-gray-100 transition-colors ${
-                            isDragOver ? 'bg-primary/20' : 'hover:bg-gray-50'
+                            isDragOver ? 'bg-primary/20' : 
+                            isBlocked ? 'bg-amber-50' : 
+                            isOutsideWorkingHours ? 'bg-gray-100' :
+                            'hover:bg-gray-50 cursor-pointer'
                           }`}
                           style={{ height: `${SLOT_HEIGHT}px` }}
+                          onClick={() => !isBlocked && !isOutsideWorkingHours && handleCellClick(emp.id, hour)}
                           onDragOver={(e) => {
                             handleDragOver(e);
                             setDragOverCell({ employeeId: emp.id, hour });
@@ -459,6 +604,43 @@ export function CalendarPage() {
                           {!isLast && (
                             <div className="absolute top-1/2 left-0 right-0 border-t border-dashed border-gray-100 pointer-events-none"></div>
                           )}
+                          
+                          {/* Blocked (break) indicator */}
+                          {isBlocked && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-amber-100/50">
+                              <span className="text-xs text-amber-700 font-medium flex items-center gap-1">
+                                <span className="material-symbols-outlined text-sm">coffee</span>
+                                Перерыв
+                              </span>
+                            </div>
+                          )}
+                          
+                          {/* Outside working hours indicator */}
+                          {isOutsideWorkingHours && !isBlocked && (
+                            <div className="absolute inset-0 bg-gray-200/30"></div>
+                          )}
+                        </div>
+                      );
+                    })}
+                    
+                    {/* Break blocks overlay */}
+                    {blocks.map(block => {
+                      const [startH, startM] = block.startTime.split(':').map(Number);
+                      const [endH, endM] = block.endTime.split(':').map(Number);
+                      const blockStart = startH + startM / 60;
+                      const blockEnd = endH + endM / 60;
+                      const top = (blockStart - 9) * SLOT_HEIGHT;
+                      const height = (blockEnd - blockStart) * SLOT_HEIGHT;
+                      
+                      return (
+                        <div
+                          key={block.id}
+                          className="absolute left-0 right-0 bg-amber-100 border-y border-amber-200 flex items-center justify-center pointer-events-none"
+                          style={{ top: `${top}px`, height: `${height}px` }}
+                        >
+                          <span className="text-xs text-amber-800 font-medium">
+                            {block.reason || 'Перерыв'}
+                          </span>
                         </div>
                       );
                     })}
@@ -580,6 +762,35 @@ export function CalendarPage() {
         onClose={() => setIsModalOpen(false)}
         onSave={async (data) => {
           try {
+            // Validate schedule constraints
+            const empId = data.employeeId;
+            const [startH, startM] = data.startTime.split(':').map(Number);
+            const startHour = startH + startM / 60;
+            
+            // Check if employee is working
+            if (!isEmployeeWorking(empId)) {
+              setError('Мастер не работает в этот день');
+              return;
+            }
+            
+            // Check working hours
+            const workingHours = getEmployeeWorkingHours(empId);
+            if (workingHours) {
+              const [endH, endM] = data.endTime.split(':').map(Number);
+              const endHour = endH + endM / 60;
+              
+              if (startHour < workingHours.start || endHour > workingHours.end) {
+                setError('Время записи выходит за рамки рабочего времени мастера');
+                return;
+              }
+            }
+            
+            // Check for breaks
+            if (isTimeBlocked(empId, startHour)) {
+              setError('Нельзя записаться на время перерыва');
+              return;
+            }
+            
             let clientId = data.clientId;
             
             // Create new client if no clientId but has name
