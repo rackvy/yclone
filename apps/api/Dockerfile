@@ -11,7 +11,12 @@ RUN pnpm install --frozen-lockfile
 
 COPY . .
 
-# ВАЖНО: НЕ делаем prisma generate здесь
+# Prisma config требует DATABASE_URL даже для generate.
+# Генерации не нужен реальный коннект, даём валидный "фейковый" URL.
+ENV DATABASE_URL="postgresql://user:pass@localhost:5432/db?schema=public"
+
+# СНАЧАЛА generate (для TS типов), ПОТОМ build
+RUN pnpm prisma generate
 RUN pnpm build
 
 # ====== production stage ======
@@ -34,6 +39,6 @@ COPY --from=builder /app/generated ./generated
 
 EXPOSE 4000
 
-# 🔥 Prisma generate + migrate уже при runtime,
-# когда env из .env.production доступен
-CMD ["sh", "-lc", "pnpm prisma generate && node dist/main.js"]
+# Реальный DATABASE_URL придёт из env_file при docker compose up
+# Миграции пока не трогаем (по желанию включишь позже)
+CMD ["node", "dist/main.js"]
