@@ -75,13 +75,24 @@ export function getDayNameFull(day: number): string {
 }
 
 export function formatTime(dateStr: string): string {
+  if (!dateStr) return '--:--';
+  
   // Parse ISO date and extract time in UTC to avoid timezone shifts
   const match = dateStr.match(/T(\d{2}):(\d{2})/);
   if (match) {
     return `${match[1]}:${match[2]}`;
   }
-  // Fallback to old method
+  
+  // If it's already HH:MM format
+  if (/^\d{2}:\d{2}$/.test(dateStr)) {
+    return dateStr;
+  }
+  
+  // Fallback to Date parsing
   const date = new Date(dateStr);
+  if (isNaN(date.getTime())) {
+    return '--:--';
+  }
   const hours = String(date.getHours()).padStart(2, '0');
   const minutes = String(date.getMinutes()).padStart(2, '0');
   return `${hours}:${minutes}`;
