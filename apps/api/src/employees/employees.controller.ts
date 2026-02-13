@@ -18,6 +18,14 @@ export class EmployeesController {
         return this.employees.list(user.companyId, branchId);
     }
 
+    @Get(":id")
+    get(
+        @CurrentUser() user: { sub: string; companyId: string },
+        @Param("id") id: string,
+    ) {
+        return this.employees.get(user.companyId, id);
+    }
+
     @Post()
     create(
         @CurrentUser() user: { sub: string; companyId: string },

@@ -1,9 +1,11 @@
 import { IsBoolean, IsOptional, IsString } from "class-validator";
 
 export class UpsertExceptionDto {
+    @IsString()
     employeeId!: string;
 
     // "YYYY-MM-DD"
+    @IsString()
     date!: string;
 
     @IsBoolean()

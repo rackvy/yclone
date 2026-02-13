@@ -6,7 +6,7 @@ import { branchesApi, Branch } from '../api/branches';
 import { employeesApi, Employee } from '../api/employees';
 import { appointmentsApi, Appointment, getStatusLabel, getStatusColor, getStatusBadgeColor } from '../api/appointments';
 import { clientsApi } from '../api/clients';
-import { scheduleApi, WorkScheduleRule, WorkScheduleException, WorkScheduleBlock } from '../api/schedule';
+import { scheduleApi, WorkScheduleException, WorkScheduleBlock } from '../api/schedule';
 import { formatDateYYYYMMDD, formatTime } from '../utils/date';
 
 const HOURS = Array.from({ length: 15 }, (_, i) => i + 9); // 09:00 - 23:00
@@ -16,7 +16,7 @@ export function CalendarPage() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [scheduleRules, setScheduleRules] = useState<Record<string, WorkScheduleRule[]>>({});
+  // Per-date schedule only (no weekly rules)
   const [scheduleExceptions, setScheduleExceptions] = useState<Record<string, WorkScheduleException[]>>({});
   const [scheduleBlocks, setScheduleBlocks] = useState<Record<string, WorkScheduleBlock[]>>({});
   const [selectedBranchId, setSelectedBranchId] = useState<string>('');
@@ -105,31 +105,26 @@ export function CalendarPage() {
   
   const loadSchedules = async (emps: Employee[]) => {
     const dateStr = formatDateYYYYMMDD(selectedDate);
-    const rules: Record<string, WorkScheduleRule[]> = {};
     const exceptions: Record<string, WorkScheduleException[]> = {};
     const blocks: Record<string, WorkScheduleBlock[]> = {};
     
     await Promise.all(
       emps.map(async (emp) => {
         try {
-          const [rulesRes, exceptionsRes, blocksRes] = await Promise.all([
-            scheduleApi.getRules(emp.id),
+          const [exceptionsRes, blocksRes] = await Promise.all([
             scheduleApi.getExceptions(emp.id, dateStr, dateStr),
             scheduleApi.getBlocks(emp.id, dateStr, dateStr),
           ]);
-          rules[emp.id] = rulesRes.days;
           exceptions[emp.id] = exceptionsRes.items;
           blocks[emp.id] = blocksRes.blocks;
         } catch (err) {
           console.error(`Failed to load schedule for ${emp.id}:`, err);
-          rules[emp.id] = [];
           exceptions[emp.id] = [];
           blocks[emp.id] = [];
         }
       })
     );
     
-    setScheduleRules(rules);
     setScheduleExceptions(exceptions);
     setScheduleBlocks(blocks);
   };
@@ -159,55 +154,27 @@ export function CalendarPage() {
     return appointments.filter(a => a.masterEmployeeId === employeeId);
   };
   
-  // Check if employee is working on selected date
+  // Check if employee is working on selected date (per-date exceptions only)
   const isEmployeeWorking = (employeeId: string): boolean => {
-    const dayOfWeek = selectedDate.getDay();
-    const rules = scheduleRules[employeeId] || [];
     const exceptions = scheduleExceptions[employeeId] || [];
     
-    // Check exceptions first (override rules)
-    const exception = exceptions.find(e => e.date === formatDateYYYYMMDD(selectedDate));
-    if (exception) {
-      return exception.isWorkingDay;
-    }
-    
-    // Check rules
-    const rule = rules.find(r => r.dayOfWeek === dayOfWeek);
-    if (rule) {
-      return rule.isWorkingDay;
-    }
-    
-    // Default: working day
-    return true;
+    // Check exceptions - employee works only if there's an exception for this date
+    const exception = exceptions.find(e => e.date.split('T')[0] === formatDateYYYYMMDD(selectedDate));
+    return exception ? exception.isWorkingDay : false;
   };
   
-  // Get working hours for employee
+  // Get working hours for employee (per-date exceptions only)
   const getEmployeeWorkingHours = (employeeId: string): { start: number; end: number } | null => {
-    const dayOfWeek = selectedDate.getDay();
-    const rules = scheduleRules[employeeId] || [];
     const exceptions = scheduleExceptions[employeeId] || [];
     
-    let startTime: string | null = null;
-    let endTime: string | null = null;
-    
-    // Check exceptions first
-    const exception = exceptions.find(e => e.date === formatDateYYYYMMDD(selectedDate));
-    if (exception && exception.isWorkingDay) {
-      startTime = exception.startTime;
-      endTime = exception.endTime;
-    } else if (!exception) {
-      // Check rules
-      const rule = rules.find(r => r.dayOfWeek === dayOfWeek);
-      if (rule && rule.isWorkingDay) {
-        startTime = rule.startTime;
-        endTime = rule.endTime;
-      }
+    // Check exceptions only
+    const exception = exceptions.find(e => e.date.split('T')[0] === formatDateYYYYMMDD(selectedDate));
+    if (!exception || !exception.isWorkingDay || !exception.startTime || !exception.endTime) {
+      return null;
     }
     
-    if (!startTime || !endTime) return null;
-    
-    const [startH, startM] = startTime.split(':').map(Number);
-    const [endH, endM] = endTime.split(':').map(Number);
+    const [startH, startM] = exception.startTime.split(':').map(Number);
+    const [endH, endM] = exception.endTime.split(':').map(Number);
     
     return {
       start: startH + startM / 60,

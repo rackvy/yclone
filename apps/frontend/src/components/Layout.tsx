@@ -1,6 +1,7 @@
 import { ReactNode, useState, useEffect } from 'react';
 import Link from './Link';
 import { branchesApi, Branch } from '../api/branches';
+import { employeesApi, Employee } from '../api/employees';
 
 interface LayoutProps {
   children: ReactNode;
@@ -15,6 +16,8 @@ export default function Layout({ children }: LayoutProps) {
   const [selectedBranchId, setSelectedBranchId] = useState<string>(() => {
     return localStorage.getItem('selectedBranchId') || '';
   });
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [isEmployeesMenuOpen, setIsEmployeesMenuOpen] = useState(false);
   const [tasks, setTasks] = useState([
     { id: 1, text: 'Подтвердить запись на 10:00', time: '10:00', completed: false },
     { id: 2, text: 'Заказать расходники для маникюра', time: '14:30', completed: false },
@@ -29,10 +32,16 @@ export default function Layout({ children }: LayoutProps) {
     return () => window.removeEventListener('popstate', handleLocationChange);
   }, []);
 
-  // Load branches
+  // Load branches and employees
   useEffect(() => {
     loadBranches();
+    loadEmployees();
   }, []);
+  
+  // Reload employees when branch changes
+  useEffect(() => {
+    loadEmployees();
+  }, [selectedBranchId]);
 
   const loadBranches = async () => {
     try {
@@ -54,6 +63,21 @@ export default function Layout({ children }: LayoutProps) {
     localStorage.setItem('selectedBranchId', branchId);
     // Reload page to apply branch filter
     window.location.reload();
+  };
+  
+  const loadEmployees = async () => {
+    try {
+      const data = await employeesApi.list();
+      // Filter by selected branch and only masters
+      const filtered = data.filter(e => 
+        e.status === 'active' && 
+        e.role === 'master' &&
+        (!selectedBranchId || e.branchId === selectedBranchId)
+      );
+      setEmployees(filtered);
+    } catch (err) {
+      console.error('Failed to load employees:', err);
+    }
   };
 
   // Navigate to calendar with selected date
@@ -307,17 +331,70 @@ export default function Layout({ children }: LayoutProps) {
               <span className="material-symbols-outlined text-xl">group</span>
               <span className={`text-sm ${isActive('/clients') ? 'font-semibold' : 'font-medium'}`}>Клиенты</span>
             </Link>
-            <Link 
-              href="/employees" 
-              className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
-                isActive('/employees') 
-                  ? 'bg-primary text-white shadow-sm' 
-                  : 'text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              <span className="material-symbols-outlined text-xl">badge</span>
-              <span className={`text-sm ${isActive('/employees') ? 'font-semibold' : 'font-medium'}`}>Сотрудники</span>
-            </Link>
+            {/* Employees Dropdown Menu */}
+            <div className="relative">
+              <button
+                onClick={() => setIsEmployeesMenuOpen(!isEmployeesMenuOpen)}
+                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+                  isActive('/employees') || currentPath.startsWith('/employee/')
+                    ? 'bg-primary text-white shadow-sm' 
+                    : 'text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                <span className="material-symbols-outlined text-xl">badge</span>
+                <span className={`text-sm flex-1 text-left ${isActive('/employees') || currentPath.startsWith('/employee/') ? 'font-semibold' : 'font-medium'}`}>
+                  Сотрудники
+                </span>
+                <span className={`material-symbols-outlined text-sm transition-transform ${isEmployeesMenuOpen ? 'rotate-180' : ''}`}>
+                  expand_more
+                </span>
+              </button>
+              
+              {isEmployeesMenuOpen && (
+                <div className="mt-1 ml-4 space-y-1">
+                  {/* All Employees Link */}
+                  <Link 
+                    href="/employees" 
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
+                      isActive('/employees') 
+                        ? 'bg-primary/10 text-primary' 
+                        : 'text-gray-600 hover:bg-gray-100'
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-base">groups</span>
+                    <span className="text-sm">Все сотрудники</span>
+                  </Link>
+                  
+                  {/* Individual Master Links */}
+                  {employees.map(emp => (
+                    <div key={emp.id} className="flex items-center gap-1">
+                      <Link 
+                        href={`/employee/${emp.id}/schedule`}
+                        className={`flex-1 flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
+                          currentPath === `/employee/${emp.id}/schedule`
+                            ? 'bg-primary/10 text-primary' 
+                            : 'text-gray-600 hover:bg-gray-100'
+                        }`}
+                      >
+                        <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-primary text-xs font-bold">
+                          {emp.fullName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                        </div>
+                        <span className="text-sm truncate">{emp.fullName}</span>
+                      </Link>
+                      <button
+                        onClick={() => {
+                          window.location.href = `/employee/${emp.id}/schedule?openModal=true`;
+                        }}
+                        className="p-2 text-gray-400 hover:text-primary hover:bg-gray-100 rounded-lg transition-colors"
+                        title="Редактировать расписание"
+                      >
+                        <span className="material-symbols-outlined text-base">calendar_add_on</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
             <Link 
               href="/schedule" 
               className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${

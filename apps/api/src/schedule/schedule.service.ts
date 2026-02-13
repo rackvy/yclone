@@ -115,6 +115,7 @@ export class ScheduleService {
         const items = await this.prisma.workScheduleException.findMany({
             where: {
                 employeeId,
+                companyId,
                 date: { gte: fromD, lte: toD },
             },
             orderBy: { date: "asc" },
@@ -198,6 +199,7 @@ export class ScheduleService {
         const blocks = await this.prisma.workScheduleBlock.findMany({
             where: {
                 employeeId,
+                companyId,
                 date: { gte: fromD, lte: toD },
             },
             orderBy: { date: "asc" },

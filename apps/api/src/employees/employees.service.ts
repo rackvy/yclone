@@ -38,6 +38,35 @@ export class EmployeesService {
         });
     }
 
+    async get(companyId: string, id: string) {
+        const emp = await this.prisma.employee.findFirst({
+            where: { id, companyId },
+            select: {
+                id: true,
+                fullName: true,
+                role: true,
+                status: true,
+                phone: true,
+                email: true,
+                avatarKey: true,
+                branchId: true,
+                masterRankId: true,
+                createdAt: true,
+                updatedAt: true,
+                branch: { select: { id: true, name: true } },
+                masterRank: { select: { id: true, name: true } },
+                services: {
+                    select: {
+                        serviceId: true,
+                        service: { select: { id: true, name: true } },
+                    },
+                },
+            },
+        });
+        if (!emp) throw new NotFoundException("Employee not found");
+        return emp;
+    }
+
     private async assertBranchInCompany(companyId: string, branchId: string) {
         const branch = await this.prisma.branch.findFirst({
             where: { id: branchId, companyId },

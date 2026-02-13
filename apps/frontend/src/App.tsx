@@ -7,6 +7,7 @@ import ProfilePage from './pages/ProfilePage'
 import SchedulePage from './pages/SchedulePage'
 import ClientsPage from './pages/ClientsPage'
 import EmployeesPage from './pages/EmployeesPage'
+import EmployeeWeekSchedulePage from './pages/EmployeeWeekSchedulePage'
 import ServicesPage from './pages/ServicesPage'
 import ProductsPage from './pages/ProductsPage'
 import { CalendarPage } from './pages/CalendarPage'
@@ -62,9 +63,23 @@ function App() {
     return <ClientsPage />
   }
 
-  // Employees
+  // Employees list
   if (currentPath === '/employees') {
     return <EmployeesPage />
+  }
+  
+  // Handle /employees/:id (redirect to schedule)
+  if (currentPath.startsWith('/employees/') && !currentPath.includes('/schedule')) {
+    const employeeId = currentPath.split('/')[2];
+    if (employeeId) {
+      window.location.replace(`/employee/${employeeId}/schedule`);
+      return null;
+    }
+  }
+  
+  // Employee week schedule (both /employee/:id/schedule and /employees/:id/schedule)
+  if ((currentPath.startsWith('/employee/') || currentPath.startsWith('/employees/')) && currentPath.endsWith('/schedule')) {
+    return <EmployeeWeekSchedulePage />
   }
 
   // Services
