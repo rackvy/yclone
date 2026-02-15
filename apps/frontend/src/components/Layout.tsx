@@ -2,6 +2,7 @@ import { ReactNode, useState, useEffect } from 'react';
 import Link from './Link';
 import { branchesApi, Branch } from '../api/branches';
 import { employeesApi, Employee } from '../api/employees';
+import { tasksApi, Task, TaskPriority, getPriorityColor, getStatusLabel } from '../api/tasks';
 
 interface LayoutProps {
   children: ReactNode;
@@ -18,11 +19,21 @@ export default function Layout({ children }: LayoutProps) {
   });
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [isEmployeesMenuOpen, setIsEmployeesMenuOpen] = useState(false);
-  const [tasks, setTasks] = useState([
-    { id: 1, text: 'Подтвердить запись на 10:00', time: '10:00', completed: false },
-    { id: 2, text: 'Заказать расходники для маникюра', time: '14:30', completed: false },
-    { id: 3, text: 'Утренний брифинг с персоналом', time: '08:45', completed: true },
-  ]);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [tasksLoading, setTasksLoading] = useState(false);
+  
+  // Task modal state
+  const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
+  const [taskForm, setTaskForm] = useState({
+    title: '',
+    description: '',
+    priority: 'medium' as TaskPriority,
+    hasDateTime: false,
+    date: '',
+    startTime: '',
+  });
+  const [taskFormError, setTaskFormError] = useState('');
+  const [savingTask, setSavingTask] = useState(false);
 
   useEffect(() => {
     const handleLocationChange = () => {
@@ -104,13 +115,90 @@ export default function Layout({ children }: LayoutProps) {
     window.location.href = '/login';
   };
 
-  const toggleTask = (taskId: number) => {
-    setTasks(tasks.map(task => 
-      task.id === taskId ? { ...task, completed: !task.completed } : task
-    ));
+  // Load tasks when panel opens or branch changes
+  useEffect(() => {
+    if (isTasksPanelOpen && selectedBranchId) {
+      loadTasks();
+    }
+  }, [isTasksPanelOpen, selectedBranchId]);
+
+  const loadTasks = async () => {
+    try {
+      setTasksLoading(true);
+      // Load all tasks (with and without date)
+      const data = await tasksApi.list(selectedBranchId);
+      setTasks(data);
+    } catch (err) {
+      console.error('Failed to load tasks:', err);
+    } finally {
+      setTasksLoading(false);
+    }
   };
 
-  const incompleteTasks = tasks.filter(t => !t.completed).length;
+  const openTaskModal = () => {
+    setTaskForm({
+      title: '',
+      description: '',
+      priority: 'medium',
+      hasDateTime: false,
+      date: '',
+      startTime: '',
+    });
+    setTaskFormError('');
+    setIsTaskModalOpen(true);
+  };
+
+  const closeTaskModal = () => {
+    setIsTaskModalOpen(false);
+    setTaskFormError('');
+  };
+
+  const handleTaskSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setTaskFormError('');
+
+    if (!taskForm.title.trim()) {
+      setTaskFormError('Укажите название задачи');
+      return;
+    }
+
+    setSavingTask(true);
+    try {
+      await tasksApi.create({
+        branchId: selectedBranchId,
+        title: taskForm.title,
+        description: taskForm.description || undefined,
+        priority: taskForm.priority,
+        hasDateTime: taskForm.hasDateTime,
+        date: taskForm.hasDateTime ? taskForm.date : undefined,
+        startTime: taskForm.hasDateTime ? taskForm.startTime : undefined,
+      });
+      await loadTasks();
+      closeTaskModal();
+    } catch (err) {
+      setTaskFormError(err instanceof Error ? err.message : 'Ошибка сохранения');
+    } finally {
+      setSavingTask(false);
+    }
+  };
+
+  const toggleTask = async (taskId: string) => {
+    try {
+      const task = tasks.find(t => t.id === taskId);
+      if (!task) return;
+      
+      if (task.status === 'done') {
+        await tasksApi.update(taskId, { status: 'new' });
+      } else {
+        await tasksApi.complete(taskId);
+      }
+      await loadTasks();
+    } catch (err) {
+      console.error('Failed to toggle task:', err);
+    }
+  };
+
+  const incompleteTasks = tasks.filter(t => t.status !== 'done' && t.status !== 'canceled').length;
 
   // Calendar functions
   const monthNames = [
@@ -521,7 +609,7 @@ export default function Layout({ children }: LayoutProps) {
           <div className="p-4 border-b border-gray-200 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="material-symbols-outlined text-primary">assignment</span>
-              <h2 className="text-lg font-bold">Задачи на сегодня</h2>
+              <h2 className="text-lg font-bold">Задачи</h2>
             </div>
             <button
               onClick={() => setIsTasksPanelOpen(false)}
@@ -533,47 +621,62 @@ export default function Layout({ children }: LayoutProps) {
 
           {/* Tasks List */}
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
-            {tasks.map((task) => (
-              <div 
-                key={task.id}
-                className={`group flex items-start gap-3 p-3 bg-gray-50 rounded-lg border border-transparent hover:border-primary/30 transition-all cursor-pointer ${
-                  task.completed ? 'opacity-50' : ''
-                }`}
-                onClick={() => toggleTask(task.id)}
-              >
-                <div className="mt-0.5">
-                  <input 
-                    type="checkbox" 
-                    checked={task.completed}
-                    onChange={() => toggleTask(task.id)}
-                    className="rounded border-gray-300 text-primary focus:ring-primary size-4 cursor-pointer"
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                </div>
-                <div className="flex-1">
-                  <p className={`text-sm font-semibold text-gray-900 leading-tight ${
-                    task.completed ? 'line-through' : ''
-                  }`}>
-                    {task.text}
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
-                    {task.completed ? (
-                      <span>Завершено в {task.time}</span>
-                    ) : (
-                      <>
-                        <span className="material-symbols-outlined text-sm">schedule</span>
-                        До {task.time}
-                      </>
+            {tasksLoading ? (
+              <div className="text-center text-gray-400 py-8">Загрузка...</div>
+            ) : tasks.length === 0 ? (
+              <div className="text-center text-gray-400 py-8">Нет задач</div>
+            ) : (
+              tasks.map((task) => (
+                <div 
+                  key={task.id}
+                  className={`group flex items-start gap-3 p-3 bg-gray-50 rounded-lg border border-transparent hover:border-primary/30 transition-all cursor-pointer ${
+                    task.status === 'done' ? 'opacity-50' : ''
+                  }`}
+                  onClick={() => toggleTask(task.id)}
+                >
+                  <div className="mt-0.5">
+                    <input 
+                      type="checkbox" 
+                      checked={task.status === 'done'}
+                      onChange={() => toggleTask(task.id)}
+                      className="rounded border-gray-300 text-primary focus:ring-primary size-4 cursor-pointer"
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${getPriorityColor(task.priority)}`}>
+                        {task.priority}
+                      </span>
+                      <span className="text-xs text-gray-400">{getStatusLabel(task.status)}</span>
+                      {task.hasDateTime && task.date && (
+                        <span className="text-xs text-primary font-medium flex items-center gap-1">
+                          <span className="material-symbols-outlined text-[10px]">event</span>
+                          {new Date(task.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
+                          {task.startTime && ` ${task.startTime.slice(0, 5)}`}
+                        </span>
+                      )}
+                    </div>
+                    <p className={`text-sm font-semibold text-gray-900 leading-tight truncate ${
+                      task.status === 'done' ? 'line-through' : ''
+                    }`}>
+                      {task.title}
+                    </p>
+                    {task.description && (
+                      <p className="text-xs text-gray-500 mt-1 line-clamp-2">{task.description}</p>
                     )}
-                  </p>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
 
           {/* Panel Footer */}
           <div className="p-4 border-t border-gray-200">
-            <button className="w-full flex items-center justify-center gap-2 py-2.5 border-2 border-dashed border-gray-200 rounded-lg text-sm font-bold text-gray-400 hover:border-primary hover:text-primary transition-all">
+            <button 
+              onClick={openTaskModal}
+              className="w-full flex items-center justify-center gap-2 py-2.5 border-2 border-dashed border-gray-200 rounded-lg text-sm font-bold text-gray-400 hover:border-primary hover:text-primary transition-all"
+            >
               <span className="material-symbols-outlined text-xl">add</span>
               <span>Добавить задачу</span>
             </button>
@@ -587,6 +690,116 @@ export default function Layout({ children }: LayoutProps) {
           className="fixed inset-0 bg-black/20 z-30"
           onClick={() => setIsTasksPanelOpen(false)}
         />
+      )}
+
+      {/* Task Modal */}
+      {isTaskModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+              <h3 className="text-lg font-bold">Новая задача</h3>
+              <button onClick={closeTaskModal} className="p-1 hover:bg-gray-100 rounded">
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            
+            <form onSubmit={handleTaskSubmit} className="p-6 space-y-4">
+              {taskFormError && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800">
+                  {taskFormError}
+                </div>
+              )}
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Название *</label>
+                <input
+                  type="text"
+                  value={taskForm.title}
+                  onChange={(e) => setTaskForm({ ...taskForm, title: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
+                  placeholder="Например: Заказать расходники"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Описание</label>
+                <textarea
+                  value={taskForm.description}
+                  onChange={(e) => setTaskForm({ ...taskForm, description: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none resize-none"
+                  rows={3}
+                  placeholder="Дополнительные детали..."
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Приоритет</label>
+                <select
+                  value={taskForm.priority}
+                  onChange={(e) => setTaskForm({ ...taskForm, priority: e.target.value as TaskPriority })}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
+                >
+                  <option value="low">Низкий</option>
+                  <option value="medium">Средний</option>
+                  <option value="high">Высокий</option>
+                </select>
+              </div>
+
+              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                <input
+                  type="checkbox"
+                  id="hasDateTime"
+                  checked={taskForm.hasDateTime}
+                  onChange={(e) => setTaskForm({ ...taskForm, hasDateTime: e.target.checked })}
+                  className="rounded border-gray-300 text-primary focus:ring-primary"
+                />
+                <label htmlFor="hasDateTime" className="text-sm font-medium text-gray-700 cursor-pointer">
+                  Указать дату и время
+                </label>
+              </div>
+
+              {taskForm.hasDateTime && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Дата</label>
+                    <input
+                      type="date"
+                      value={taskForm.date}
+                      onChange={(e) => setTaskForm({ ...taskForm, date: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Время</label>
+                    <input
+                      type="time"
+                      value={taskForm.startTime}
+                      onChange={(e) => setTaskForm({ ...taskForm, startTime: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
+                    />
+                  </div>
+                </div>
+              )}
+              
+              <div className="flex gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={closeTaskModal}
+                  className="flex-1 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Отмена
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingTask}
+                  className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
+                >
+                  {savingTask ? 'Сохранение...' : 'Создать'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );

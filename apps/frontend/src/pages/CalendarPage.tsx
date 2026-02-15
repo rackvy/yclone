@@ -7,6 +7,7 @@ import { employeesApi, Employee } from '../api/employees';
 import { appointmentsApi, Appointment, getStatusLabel, getStatusColor, getStatusBadgeColor } from '../api/appointments';
 import { clientsApi } from '../api/clients';
 import { scheduleApi, WorkScheduleException, WorkScheduleBlock } from '../api/schedule';
+import { tasksApi, Task, getPriorityColor } from '../api/tasks';
 import { formatDateYYYYMMDD, formatTime } from '../utils/date';
 
 const HOURS = Array.from({ length: 15 }, (_, i) => i + 9); // 09:00 - 23:00
@@ -19,6 +20,7 @@ export function CalendarPage() {
   // Per-date schedule only (no weekly rules)
   const [scheduleExceptions, setScheduleExceptions] = useState<Record<string, WorkScheduleException[]>>({});
   const [scheduleBlocks, setScheduleBlocks] = useState<Record<string, WorkScheduleBlock[]>>({});
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [selectedBranchId, setSelectedBranchId] = useState<string>('');
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
     const savedDate = localStorage.getItem('calendarDate');
@@ -82,10 +84,12 @@ export function CalendarPage() {
       setLoading(true);
       setError('');
       console.log('Loading appointments for:', selectedBranchId, formatDateYYYYMMDD(selectedDate));
-      const [emps, apps] = await Promise.all([
+      const [emps, apps, tasksData] = await Promise.all([
         employeesApi.list(),
         appointmentsApi.listDay(selectedBranchId, formatDateYYYYMMDD(selectedDate)),
+        tasksApi.listByDate(selectedBranchId, formatDateYYYYMMDD(selectedDate)),
       ]);
+      setTasks(tasksData);
       console.log('Loaded appointments:', apps.length, apps.map(a => ({ id: a.id, startAt: a.startAt, endAt: a.endAt })));
       // Filter employees by selected branch and active status
       const filteredEmployees = emps.filter(e => 
@@ -679,6 +683,76 @@ export function CalendarPage() {
                   </div>
                 );
               })}
+
+              {/* Tasks Column */}
+              <div className="w-56 min-w-[14rem] border-r border-gray-100 relative bg-purple-50/30">
+                {/* Tasks Column Header */}
+                <div className="h-14 border-b border-gray-200 flex items-center justify-center bg-purple-100/50 sticky top-0 z-10">
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-purple-600">task_alt</span>
+                    <span className="font-bold text-sm text-purple-900">Задачи</span>
+                  </div>
+                </div>
+                
+                {/* Time slots for tasks */}
+                {HOURS.map((hour, index) => {
+                  const isLast = index === HOURS.length - 1;
+                  const hourTasks = tasks.filter(t => {
+                    if (!t.hasDateTime || !t.startTime) return false;
+                    const taskHour = parseInt(t.startTime.split(':')[0]);
+                    return taskHour === hour;
+                  });
+                  
+                  return (
+                    <div
+                      key={hour}
+                      className="relative border-b border-gray-100"
+                      style={{ height: `${SLOT_HEIGHT}px` }}
+                    >
+                      {/* Half-hour line */}
+                      {!isLast && (
+                        <div className="absolute top-1/2 left-0 right-0 border-t border-dashed border-gray-200 pointer-events-none"></div>
+                      )}
+                      
+                      {/* Tasks for this hour */}
+                      <div className="p-1 space-y-1">
+                        {hourTasks.map(task => (
+                          <div
+                            key={task.id}
+                            className={`text-xs p-1.5 rounded border-l-2 ${getPriorityColor(task.priority)} bg-white shadow-sm cursor-pointer hover:shadow-md transition-shadow`}
+                            onClick={() => {/* TODO: open task detail */}}
+                          >
+                            <div className="font-medium truncate">{task.title}</div>
+                            {task.startTime && (
+                              <div className="text-[10px] opacity-75">{task.startTime.slice(0, 5)}</div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+                
+                {/* Tasks without specific time (all day) */}
+                {tasks.filter(t => !t.hasDateTime || !t.startTime).length > 0 && (
+                  <div className="absolute bottom-0 left-0 right-0 bg-purple-100/80 border-t-2 border-purple-300 p-2">
+                    <div className="text-xs font-bold text-purple-900 mb-1 flex items-center gap-1">
+                      <span className="material-symbols-outlined text-[14px]">schedule</span>
+                      Без времени
+                    </div>
+                    <div className="space-y-1">
+                      {tasks.filter(t => !t.hasDateTime || !t.startTime).map(task => (
+                        <div
+                          key={task.id}
+                          className={`text-xs p-1.5 rounded border-l-2 ${getPriorityColor(task.priority)} bg-white shadow-sm cursor-pointer hover:shadow-md transition-shadow`}
+                        >
+                          <div className="font-medium truncate">{task.title}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
 
               {employees.length === 0 && (
                 <div className="flex-1 flex items-center justify-center text-gray-500">

@@ -1,0 +1,43 @@
+import { IsString, IsOptional, IsBoolean, IsEnum, IsDateString, IsInt, Min } from 'class-validator';
+import { TaskPriority, TaskRepeatType } from '../../../generated/prisma';
+
+export class CreateTaskDto {
+  @IsString()
+  branchId: string;
+
+  @IsString()
+  title: string;
+
+  @IsString()
+  @IsOptional()
+  description?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  hasDateTime?: boolean;
+
+  @IsDateString()
+  @IsOptional()
+  date?: string;
+
+  @IsString()
+  @IsOptional()
+  startTime?: string;
+
+  @IsInt()
+  @Min(1)
+  @IsOptional()
+  durationMin?: number;
+
+  @IsEnum(TaskRepeatType)
+  @IsOptional()
+  repeatType?: TaskRepeatType;
+
+  @IsDateString()
+  @IsOptional()
+  repeatUntil?: string;
+
+  @IsEnum(TaskPriority)
+  @IsOptional()
+  priority?: TaskPriority;
+}

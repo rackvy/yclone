@@ -71,6 +71,7 @@ model Company {
   scheduleRules      WorkScheduleRule[]
   scheduleExceptions WorkScheduleException[]
   scheduleBlocks     WorkScheduleBlock[]
+  tasks              Task[]
 }
 
 model User {
@@ -118,6 +119,8 @@ model Branch {
 
   name    String
   address String?
+  
+  tasks Task[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -486,4 +489,62 @@ model WorkScheduleBlock {
   @@index([companyId])
   @@index([employeeId])
   @@index([employeeId, date])
+}
+
+enum TaskStatus {
+  new
+  in_progress
+  done
+  canceled
+}
+
+enum TaskPriority {
+  low
+  medium
+  high
+}
+
+enum TaskRepeatType {
+  none
+  daily
+  weekly
+  monthly
+  yearly
+}
+
+model Task {
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  branchId  String
+  branch    Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  title       String
+  description String?
+  
+  // Task type and scheduling
+  hasDateTime Boolean  @default(false) // if false - simple task (popup only)
+  date        DateTime? // specific date for calendar tasks
+  startTime   String?   // "HH:MM" format
+  durationMin Int       @default(60) // duration in minutes
+  
+  // Recurrence
+  repeatType  TaskRepeatType @default(none)
+  repeatUntil DateTime?      // until when to repeat
+  
+  // Status and priority
+  status   TaskStatus   @default(new)
+  priority TaskPriority @default(medium)
+  
+  // Completion
+  completedAt DateTime?
+  completedBy String?   // userId who completed
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId])
+  @@index([branchId])
+  @@index([date])
+  @@index([status])
 }
