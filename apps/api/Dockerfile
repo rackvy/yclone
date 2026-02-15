@@ -22,8 +22,8 @@ RUN pnpm prisma generate
 RUN pnpm build
 
 # 3) КЛЮЧ: кладём generated внутрь dist, чтобы ../../generated работало из dist/src/*
-RUN mkdir -p /app/dist/generated \
-  && cp -R /app/generated/prisma /app/dist/generated/prisma
+RUN mkdir -p /app/dist/generated/prisma \
+  && cp -R /app/generated/prisma/. /app/dist/generated/prisma/
 
 # ====== production stage ======
 FROM node:20-alpine AS runner
