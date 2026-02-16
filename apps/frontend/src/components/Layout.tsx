@@ -43,6 +43,15 @@ export default function Layout({ children }: LayoutProps) {
     return () => window.removeEventListener('popstate', handleLocationChange);
   }, []);
 
+  // Listen for openTaskModal event from CalendarPage
+  useEffect(() => {
+    const handleOpenTaskModal = () => {
+      openTaskModal();
+    };
+    window.addEventListener('openTaskModal', handleOpenTaskModal);
+    return () => window.removeEventListener('openTaskModal', handleOpenTaskModal);
+  }, []);
+
   // Load branches and employees
   useEffect(() => {
     loadBranches();

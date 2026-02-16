@@ -2,13 +2,38 @@ import { useEffect, useMemo, useState } from 'react';
 import Layout from '../components/Layout';
 import { AppointmentModal } from '../components/AppointmentModal';
 import { AppointmentDetailModal } from '../components/AppointmentDetailModal';
+import { NoteModal } from '../components/NoteModal';
+import { NoteDetailModal } from '../components/NoteDetailModal';
 import { branchesApi, Branch } from '../api/branches';
 import { employeesApi, Employee } from '../api/employees';
 import { appointmentsApi, Appointment, getStatusLabel, getStatusColor, getStatusBadgeColor } from '../api/appointments';
 import { clientsApi } from '../api/clients';
 import { scheduleApi, WorkScheduleException, WorkScheduleBlock } from '../api/schedule';
-import { tasksApi, Task, getPriorityColor } from '../api/tasks';
+import { notesApi, Note, getNoteColor } from '../api/notes';
 import { formatDateYYYYMMDD, formatTime } from '../utils/date';
+
+// Custom scrollbar styles for consistent cross-browser behavior
+const scrollbarStyles = `
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: #f1f1f1;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 6px;
+    border: 2px solid #f1f1f1;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #a1a1a1;
+  }
+  .custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: #c1c1c1 #f1f1f1;
+  }
+`;
 
 const HOURS = Array.from({ length: 15 }, (_, i) => i + 9); // 09:00 - 23:00
 const SLOT_HEIGHT = 80; // px per hour - increased for better visibility
@@ -20,7 +45,7 @@ export function CalendarPage() {
   // Per-date schedule only (no weekly rules)
   const [scheduleExceptions, setScheduleExceptions] = useState<Record<string, WorkScheduleException[]>>({});
   const [scheduleBlocks, setScheduleBlocks] = useState<Record<string, WorkScheduleBlock[]>>({});
-  const [tasks, setTasks] = useState<Task[]>([]);
+  const [notes, setNotes] = useState<Note[]>([]);
   const [selectedBranchId, setSelectedBranchId] = useState<string>('');
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
     const savedDate = localStorage.getItem('calendarDate');
@@ -38,9 +63,15 @@ export function CalendarPage() {
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
+  const [isNoteDetailModalOpen, setIsNoteDetailModalOpen] = useState(false);
+  const [selectedNote, setSelectedNote] = useState<Note | null>(null);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('');
   const [selectedTime, setSelectedTime] = useState<string>('');
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
+  
+  // Dropdown menu state
+  const [isCreateMenuOpen, setIsCreateMenuOpen] = useState(false);
 
   // Drag & Drop states
   const [draggedAppointment, setDraggedAppointment] = useState<Appointment | null>(null);
@@ -84,12 +115,22 @@ export function CalendarPage() {
       setLoading(true);
       setError('');
       console.log('Loading appointments for:', selectedBranchId, formatDateYYYYMMDD(selectedDate));
-      const [emps, apps, tasksData] = await Promise.all([
+      
+      // Load employees and appointments (critical data)
+      const [emps, apps] = await Promise.all([
         employeesApi.list(),
         appointmentsApi.listDay(selectedBranchId, formatDateYYYYMMDD(selectedDate)),
-        tasksApi.listByDate(selectedBranchId, formatDateYYYYMMDD(selectedDate)),
       ]);
-      setTasks(tasksData);
+      
+      // Load notes separately (non-critical)
+      try {
+        const notesData = await notesApi.listByDate(selectedBranchId, formatDateYYYYMMDD(selectedDate));
+        setNotes(notesData);
+      } catch (notesErr) {
+        console.error('Failed to load notes:', notesErr);
+        setNotes([]); // Reset notes on error
+      }
+      
       console.log('Loaded appointments:', apps.length, apps.map(a => ({ id: a.id, startAt: a.startAt, endAt: a.endAt })));
       // Filter employees by selected branch and active status
       const filteredEmployees = emps.filter(e => 
@@ -356,6 +397,7 @@ export function CalendarPage() {
 
   return (
     <Layout>
+    <style>{scrollbarStyles}</style>
     <div className="flex-1 flex flex-col h-full relative overflow-hidden">
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-6 pt-3 pb-0 flex flex-col gap-3 z-20">
@@ -398,17 +440,62 @@ export function CalendarPage() {
             <button className="p-2 text-gray-500 hover:bg-gray-100 rounded-full">
               <span className="material-symbols-outlined">notifications</span>
             </button>
-            <button 
-              onClick={() => {
-                setSelectedEmployeeId('');
-                setSelectedTime('');
-                setIsModalOpen(true);
-              }}
-              className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-white px-5 py-2 rounded-lg text-sm font-bold shadow-sm transition-colors"
-            >
-              <span className="material-symbols-outlined text-lg">add_circle</span>
-              <span>Новая запись</span>
-            </button>
+            {/* Create Button with Dropdown */}
+            <div className="relative flex">
+              {/* Dropdown toggle */}
+              <button
+                onClick={() => setIsCreateMenuOpen(!isCreateMenuOpen)}
+                className="flex items-center justify-center bg-primary hover:bg-primary/90 text-white px-3 py-2 rounded-l-lg border-r border-white/20 transition-colors"
+              >
+                <span className="material-symbols-outlined">expand_more</span>
+              </button>
+              {/* Main button */}
+              <button 
+                onClick={() => {
+                  setSelectedEmployeeId('');
+                  setSelectedTime('');
+                  setIsModalOpen(true);
+                }}
+                className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-white px-5 py-2 rounded-r-lg text-sm font-bold shadow-sm transition-colors"
+              >
+                <span className="material-symbols-outlined text-lg">add_circle</span>
+                <span>Новая запись</span>
+              </button>
+              
+              {/* Dropdown Menu */}
+              {isCreateMenuOpen && (
+                <>
+                  <div 
+                    className="fixed inset-0 z-40"
+                    onClick={() => setIsCreateMenuOpen(false)}
+                  />
+                  <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-50">
+                    <button
+                      onClick={() => {
+                        setIsCreateMenuOpen(false);
+                        setSelectedTime('');
+                        setIsNoteModalOpen(true);
+                      }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-amber-50 hover:text-amber-700 transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-amber-500">sticky_note_2</span>
+                      <span className="font-medium">Новая заметка</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setIsCreateMenuOpen(false);
+                        // Open task modal in Layout - using custom event
+                        window.dispatchEvent(new CustomEvent('openTaskModal'));
+                      }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-purple-50 hover:text-purple-700 transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-purple-500">assignment</span>
+                      <span className="font-medium">Новая задача</span>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
 
@@ -481,11 +568,18 @@ export function CalendarPage() {
                   Нет работающих сотрудников на эту дату
                 </div>
               )}
+              {/* Notes column header */}
+              <div className="w-56 min-w-[14rem] border-r border-gray-200 p-3 bg-amber-50/50" style={{ marginRight: '10px' }}>
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-amber-600">sticky_note_2</span>
+                  <span className="font-bold text-sm text-amber-900">Заметки</span>
+                </div>
+              </div>
             </div>
           </div>
 
           {/* Scrollable Time Grid */}
-          <div className="flex-1 overflow-y-auto relative bg-white">
+          <div className="flex-1 overflow-y-scroll relative bg-white custom-scrollbar">
             {/* Current Time Indicator */}
             {currentTimePosition !== null && (
               <div
@@ -684,23 +778,14 @@ export function CalendarPage() {
                 );
               })}
 
-              {/* Tasks Column */}
-              <div className="w-56 min-w-[14rem] border-r border-gray-100 relative bg-purple-50/30">
-                {/* Tasks Column Header */}
-                <div className="h-14 border-b border-gray-200 flex items-center justify-center bg-purple-100/50 sticky top-0 z-10">
-                  <div className="flex items-center gap-2">
-                    <span className="material-symbols-outlined text-purple-600">task_alt</span>
-                    <span className="font-bold text-sm text-purple-900">Задачи</span>
-                  </div>
-                </div>
-                
-                {/* Time slots for tasks */}
+              {/* Notes Column */}
+              <div className="w-56 min-w-[14rem] border-r border-gray-100 relative bg-amber-50/30">
+                {/* Time slots for notes */}
                 {HOURS.map((hour, index) => {
                   const isLast = index === HOURS.length - 1;
-                  const hourTasks = tasks.filter(t => {
-                    if (!t.hasDateTime || !t.startTime) return false;
-                    const taskHour = parseInt(t.startTime.split(':')[0]);
-                    return taskHour === hour;
+                  const hourNotes = notes.filter(n => {
+                    const noteHour = parseInt(n.startTime.split(':')[0]);
+                    return noteHour === hour;
                   });
                   
                   return (
@@ -714,44 +799,31 @@ export function CalendarPage() {
                         <div className="absolute top-1/2 left-0 right-0 border-t border-dashed border-gray-200 pointer-events-none"></div>
                       )}
                       
-                      {/* Tasks for this hour */}
+                      {/* Notes for this hour */}
                       <div className="p-1 space-y-1">
-                        {hourTasks.map(task => (
-                          <div
-                            key={task.id}
-                            className={`text-xs p-1.5 rounded border-l-2 ${getPriorityColor(task.priority)} bg-white shadow-sm cursor-pointer hover:shadow-md transition-shadow`}
-                            onClick={() => {/* TODO: open task detail */}}
-                          >
-                            <div className="font-medium truncate">{task.title}</div>
-                            {task.startTime && (
-                              <div className="text-[10px] opacity-75">{task.startTime.slice(0, 5)}</div>
-                            )}
-                          </div>
-                        ))}
+                        {hourNotes.map(note => {
+                          const colors = getNoteColor(note.color);
+                          return (
+                            <div
+                              key={note.id}
+                              className={`text-xs p-1.5 rounded border-l-2 ${colors.bg} ${colors.border} ${colors.text} shadow-sm cursor-pointer hover:shadow-md transition-shadow`}
+                              onClick={() => {
+                                setSelectedNote(note);
+                                setIsNoteDetailModalOpen(true);
+                              }}
+                            >
+                              <div className="font-medium truncate">{note.title}</div>
+                              {note.client && (
+                                <div className="text-[10px] opacity-75 truncate">{note.client.fullName}</div>
+                              )}
+                              <div className="text-[10px] opacity-60">{note.startTime.slice(0, 5)} - {note.endTime.slice(0, 5)}</div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   );
                 })}
-                
-                {/* Tasks without specific time (all day) */}
-                {tasks.filter(t => !t.hasDateTime || !t.startTime).length > 0 && (
-                  <div className="absolute bottom-0 left-0 right-0 bg-purple-100/80 border-t-2 border-purple-300 p-2">
-                    <div className="text-xs font-bold text-purple-900 mb-1 flex items-center gap-1">
-                      <span className="material-symbols-outlined text-[14px]">schedule</span>
-                      Без времени
-                    </div>
-                    <div className="space-y-1">
-                      {tasks.filter(t => !t.hasDateTime || !t.startTime).map(task => (
-                        <div
-                          key={task.id}
-                          className={`text-xs p-1.5 rounded border-l-2 ${getPriorityColor(task.priority)} bg-white shadow-sm cursor-pointer hover:shadow-md transition-shadow`}
-                        >
-                          <div className="font-medium truncate">{task.title}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
 
               {employees.length === 0 && (
@@ -871,6 +943,57 @@ export function CalendarPage() {
         selectedBranchId={selectedBranchId}
         selectedEmployeeId={selectedEmployeeId}
         selectedTime={selectedTime}
+      />
+
+      {/* Note Modal */}
+      <NoteModal
+        isOpen={isNoteModalOpen}
+        onClose={() => setIsNoteModalOpen(false)}
+        onSave={async (data) => {
+          try {
+            await notesApi.create(data);
+            await loadData();
+            setIsNoteModalOpen(false);
+          } catch (err) {
+            setError(err instanceof Error ? err.message : 'Ошибка создания заметки');
+          }
+        }}
+        branchId={selectedBranchId}
+        initialDate={selectedDate}
+        initialStartTime={selectedTime}
+      />
+
+      {/* Note Detail Modal */}
+      <NoteDetailModal
+        isOpen={isNoteDetailModalOpen}
+        onClose={() => {
+          setIsNoteDetailModalOpen(false);
+          setSelectedNote(null);
+        }}
+        onSave={async (data) => {
+          try {
+            if (selectedNote) {
+              await notesApi.update(selectedNote.id, data);
+              await loadData();
+            }
+          } catch (err) {
+            setError(err instanceof Error ? err.message : 'Ошибка обновления заметки');
+          }
+        }}
+        onDelete={async () => {
+          try {
+            if (selectedNote) {
+              await notesApi.delete(selectedNote.id);
+              await loadData();
+              setIsNoteDetailModalOpen(false);
+              setSelectedNote(null);
+            }
+          } catch (err) {
+            setError(err instanceof Error ? err.message : 'Ошибка удаления заметки');
+          }
+        }}
+        note={selectedNote}
+        branchId={selectedBranchId}
       />
     </div>
     </Layout>
