@@ -6,5 +6,5 @@ export class ServicePriceDto {
 
     @IsInt()
     @Min(0)
-    price!: number; // храним в рублях целым числом
+    price!: number; // рубли
 }

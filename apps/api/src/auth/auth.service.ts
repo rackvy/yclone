@@ -15,14 +15,18 @@ export class AuthService {
     async register(dto: RegisterDto) {
         const passwordHash = await bcrypt.hash(dto.password, 10);
 
+        // Create company first
         const company = await this.prisma.company.create({
             data: {
                 name: dto.companyName,
-                branches: {
-                    create: {
-                        name: "Главный филиал",
-                    },
-                },
+            },
+        });
+
+        // Create main branch explicitly with companyId
+        await this.prisma.branch.create({
+            data: {
+                name: "Главный филиал",
+                companyId: company.id,
             },
         });
 

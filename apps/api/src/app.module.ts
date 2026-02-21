@@ -18,6 +18,12 @@ import { ProductsModule } from "./products/products.module";
 import { StockMovementsModule } from "./stock-movements/stock-movements.module";
 import { TasksModule } from './tasks/tasks.module';
 import { NotesModule } from './notes/notes.module';
+import { DashboardModule } from "./dashboard/dashboard.module";
+import { PaymentsModule } from './payments/payments.module';
+import { CashboxesModule } from './cashboxes/cashboxes.module';
+import { ReportsModule } from "./reports/reports.module";
+import { SalesModule } from './sales/sales.module';
+import { CashShiftsModule } from './cash-shifts/cash-shifts.module';
 
 @Module({
     imports: [
@@ -40,6 +46,12 @@ import { NotesModule } from './notes/notes.module';
         StockMovementsModule,
         TasksModule,
         NotesModule,
+        DashboardModule,
+        PaymentsModule,
+        CashboxesModule,
+        ReportsModule,
+        SalesModule,
+        CashShiftsModule,
     ],
 })
 export class AppModule {}

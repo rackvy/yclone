@@ -137,11 +137,11 @@ export class AppointmentsService {
     private assertStatusTransition(from: string, to: string) {
         const allowed: Record<string, string[]> = {
             new: ["confirmed", "canceled"],
-            confirmed: ["waiting", "canceled"],
-            waiting: ["done", "no_show"],
+            confirmed: ["waiting", "done", "canceled"],
+            waiting: ["done", "no_show", "canceled"],
             done: [],
             no_show: [],
-            canceled: [],
+            canceled: ["new"],
         };
 
         if (!allowed[from]?.includes(to)) {
@@ -316,6 +316,8 @@ export class AppointmentsService {
                 id: true,
                 type: true,
                 status: true,
+                paymentStatus: true,
+                paidTotalKopeks: true,
                 title: true,
                 comment: true,
                 startAt: true,
@@ -932,5 +934,179 @@ export class AppointmentsService {
         });
     }
 
+    async update(
+        companyId: string,
+        appointmentId: string,
+        dto: {
+            masterEmployeeId?: string;
+            date?: string;
+            startTime?: string;
+            comment?: string;
+            clientId?: string;
+            services?: { serviceId: string; sortOrder: number }[];
+        },
+    ) {
+        const appt = await this.prisma.appointment.findFirst({
+            where: { id: appointmentId, companyId },
+            select: {
+                id: true,
+                status: true,
+                type: true,
+                branchId: true,
+                masterEmployeeId: true,
+                startAt: true,
+                endAt: true,
+            },
+        });
 
+        if (!appt) throw new NotFoundException("Appointment not found");
+        if (appt.type === "block") {
+            throw new BadRequestException("Cannot edit block appointment");
+        }
+
+        // Build update data
+        const updateData: any = {};
+        
+        if (dto.comment !== undefined) {
+            updateData.comment = dto.comment.trim() || null;
+        }
+        
+        if (dto.clientId !== undefined) {
+            if (dto.clientId) {
+                await this.assertClient(companyId, dto.clientId);
+                updateData.clientId = dto.clientId;
+            } else {
+                updateData.clientId = null;
+            }
+        }
+
+        // Handle employee change
+        if (dto.masterEmployeeId && dto.masterEmployeeId !== appt.masterEmployeeId) {
+            await this.assertEmployee(companyId, dto.masterEmployeeId);
+            updateData.masterEmployeeId = dto.masterEmployeeId;
+        }
+
+        // Handle date/time change
+        let newStartAt = appt.startAt;
+        let newEndAt = appt.endAt;
+        
+        if (dto.date || dto.startTime) {
+            const dateStr = dto.date || formatDateYYYYMMDD(appt.startAt);
+            const timeStr = dto.startTime || formatTimeHHMM(appt.startAt);
+            
+            const baseDate = parseDateYYYYMMDD(dateStr);
+            const [hours, mins] = timeStr.split(":").map(Number);
+            newStartAt = new Date(baseDate.getTime() + (hours * 60 + mins) * 60000);
+            
+            // Calculate new end time based on services duration
+            if (dto.services && dto.services.length > 0) {
+                const serviceIds = dto.services.map(s => s.serviceId);
+                const services = await this.prisma.service.findMany({
+                    where: { id: { in: serviceIds }, companyId },
+                    select: { id: true, durationMin: true },
+                });
+                const durationMap = new Map(services.map(s => [s.id, s.durationMin]));
+                const totalMinutes = dto.services.reduce((sum, s) => sum + (durationMap.get(s.serviceId) || 0), 0);
+                newEndAt = new Date(newStartAt.getTime() + totalMinutes * 60000);
+            } else {
+                // Keep same duration
+                const duration = appt.endAt.getTime() - appt.startAt.getTime();
+                newEndAt = new Date(newStartAt.getTime() + duration);
+            }
+            
+            updateData.startAt = newStartAt;
+            updateData.endAt = newEndAt;
+        }
+
+        return this.prisma.$transaction(async (tx) => {
+            // Update appointment basic fields
+            await tx.appointment.update({
+                where: { id: appointmentId },
+                data: updateData,
+            });
+
+            // Update services if provided
+            if (dto.services && dto.services.length > 0) {
+                // Delete existing services
+                await tx.appointmentService.deleteMany({
+                    where: { appointmentId },
+                });
+
+                // Get service details
+                const serviceIds = dto.services.map(s => s.serviceId);
+                const services = await tx.service.findMany({
+                    where: { id: { in: serviceIds }, companyId },
+                    select: { 
+                        id: true, 
+                        durationMin: true,
+                        pricesByRank: {
+                            select: { price: true },
+                            take: 1,
+                        },
+                    },
+                });
+                const serviceMap = new Map(services.map(s => [s.id, s]));
+
+                // Create new services
+                for (const s of dto.services) {
+                    const service = serviceMap.get(s.serviceId);
+                    if (!service) continue;
+                    
+                    const price = service.pricesByRank[0]?.price || 0;
+                    await tx.appointmentService.create({
+                        data: {
+                            appointmentId,
+                            serviceId: s.serviceId,
+                            durationMin: service.durationMin,
+                            price,
+                            sortOrder: s.sortOrder,
+                        },
+                    });
+                }
+
+                // Recalculate totals
+                await this.recalcTotals(tx as any, appointmentId);
+            }
+
+            // Return updated appointment
+            return tx.appointment.findUnique({
+                where: { id: appointmentId },
+                select: {
+                    id: true,
+                    type: true,
+                    status: true,
+                    comment: true,
+                    startAt: true,
+                    endAt: true,
+                    total: true,
+                    masterEmployeeId: true,
+                    clientId: true,
+                    services: {
+                        orderBy: { sortOrder: "asc" },
+                        select: {
+                            id: true,
+                            durationMin: true,
+                            price: true,
+                            service: { select: { id: true, name: true } },
+                        },
+                    },
+                },
+            });
+        });
+    }
+
+}
+
+// Helper functions
+function formatDateYYYYMMDD(date: Date): string {
+    const y = date.getUTCFullYear();
+    const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(date.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+
+function formatTimeHHMM(date: Date): string {
+    const h = String(date.getUTCHours()).padStart(2, '0');
+    const m = String(date.getUTCMinutes()).padStart(2, '0');
+    return `${h}:${m}`;
 }

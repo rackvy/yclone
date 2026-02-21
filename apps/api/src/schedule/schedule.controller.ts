@@ -1,12 +1,14 @@
 import { Body, Controller, Delete, Get, Param, Post, Query, UseGuards } from "@nestjs/common";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
+import { RolesGuard } from "../auth/guards/roles.guard";
+import { Roles } from "../common/decorators/roles.decorator";
 import { CurrentUser } from "../common/decorators/current-user.decorator";
 import { ScheduleService } from "./schedule.service";
 import { UpsertRulesDto } from "./dto/upsert-rules.dto";
 import { UpsertExceptionDto } from "./dto/upsert-exception.dto";
 
 @Controller("schedule")
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class ScheduleController {
     constructor(private readonly schedule: ScheduleService) {}
 
@@ -21,6 +23,7 @@ export class ScheduleController {
 
     // POST /schedule/rules  { employeeId, days: [...] }
     @Post("rules")
+    @Roles('owner', 'admin')
     upsertRules(@CurrentUser() user: { sub: string; companyId: string }, @Body() dto: UpsertRulesDto) {
         return this.schedule.upsertRules(user.companyId, dto.employeeId, dto.days);
     }
@@ -38,12 +41,14 @@ export class ScheduleController {
 
     // POST /schedule/exceptions { employeeId, date, isWorkingDay, startTime?, endTime? }
     @Post("exceptions")
+    @Roles('owner', 'admin')
     upsertException(@CurrentUser() user: { sub: string; companyId: string }, @Body() dto: UpsertExceptionDto) {
         return this.schedule.upsertException(user.companyId, dto);
     }
 
     // DELETE /schedule/exceptions?employeeId=...&date=YYYY-MM-DD
     @Delete("exceptions")
+    @Roles('owner', 'admin')
     removeException(
         @CurrentUser() user: { sub: string; companyId: string },
         @Query("employeeId") employeeId: string,
@@ -65,12 +70,14 @@ export class ScheduleController {
 
     // POST /schedule/blocks { employeeId, date, startTime, endTime, reason? }
     @Post("blocks")
+    @Roles('owner', 'admin')
     createBlock(@CurrentUser() user: { sub: string; companyId: string }, @Body() dto: any) {
         return this.schedule.createBlock(user.companyId, dto);
     }
 
     // DELETE /schedule/blocks/:id
     @Delete("blocks/:id")
+    @Roles('owner', 'admin')
     deleteBlock(
         @CurrentUser() user: { sub: string; companyId: string },
         @Param("id") id: string,

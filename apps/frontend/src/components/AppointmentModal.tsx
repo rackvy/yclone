@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Employee, employeesApi } from '../api/employees';
 import { Client, clientsApi } from '../api/clients';
 import { Service, servicesApi } from '../api/services';
-import { Product, productsApi } from '../api/products';
+import { Product, productsApi, formatRubles } from '../api/products';
 import { AppointmentStatus } from '../api/appointments';
 import { formatDateYYYYMMDD } from '../utils/date';
 
@@ -545,7 +545,7 @@ export function AppointmentModal({
                             >
                               <div className="flex-1">
                                 <p className="text-sm font-medium">{product.name}</p>
-                                <p className="text-xs text-gray-500">{product.price.toLocaleString('ru-RU')} ₽ / шт</p>
+                                <p className="text-xs text-gray-500">{formatRubles(product.price)} / шт</p>
                               </div>
                               <div className="flex items-center gap-3">
                                 <div className="flex items-center gap-2">
@@ -566,7 +566,7 @@ export function AppointmentModal({
                                   </button>
                                 </div>
                                 <span className="text-sm font-bold w-16 text-right">
-                                  {(product.price * product.qty).toLocaleString('ru-RU')} ₽
+                                  {formatRubles(product.price * product.qty)}
                                 </span>
                                 <button
                                   type="button"
@@ -603,7 +603,7 @@ export function AppointmentModal({
                               <p className="text-xs text-gray-500">В наличии: {product.stockQty} шт</p>
                             </div>
                             <span className="text-sm font-bold text-amber-600">
-                              {product.price.toLocaleString('ru-RU')} ₽
+                              {formatRubles(product.price)}
                             </span>
                           </button>
                         ))}
@@ -618,11 +618,11 @@ export function AppointmentModal({
                 <div className="flex justify-between items-center">
                   <div className="text-sm">
                     <span className="text-gray-500">Итого:</span>
-                    <span className="ml-2 text-xl font-bold">{total.toLocaleString('ru-RU')} ₽</span>
+                    <span className="ml-2 text-xl font-bold">{formatRubles(total)}</span>
                   </div>
                   <div className="text-xs text-gray-400">
-                    {formData.services.length > 0 && `Услуги: ${servicesTotal.toLocaleString('ru-RU')} ₽`}
-                    {formData.products.length > 0 && ` • Товары: ${productsTotal.toLocaleString('ru-RU')} ₽`}
+                    {formData.services.length > 0 && `Услуги: ${formatRubles(servicesTotal)}`}
+                    {formData.products.length > 0 && ` • Товары: ${formatRubles(productsTotal)}`}
                   </div>
                 </div>
               </div>

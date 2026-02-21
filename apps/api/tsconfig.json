@@ -22,7 +22,8 @@
     "strictBindCallApply": false,
     "noFallthroughCasesInSwitch": false,
     "paths": {
-      "@prisma/generated": ["./generated/prisma/index.js"]
+      "@prisma/generated": ["./generated/prisma/index.js"],
+      "@prisma/generated/*": ["./generated/prisma/*.js"]
     }
   }
 }

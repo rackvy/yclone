@@ -16,9 +16,22 @@ export interface AuthResponse {
   refreshToken: string;
 }
 
+export type UserRole = 'owner' | 'admin' | 'manager' | 'master';
+
 export interface UserInfo {
   userId: string;
   companyId: string;
+  role: UserRole;
+  email: string;
+  company: {
+    id: string;
+    name: string;
+  };
+  employee?: {
+    id: string;
+    fullName: string;
+    role: string;
+  };
 }
 
 export const authApi = {

@@ -80,11 +80,25 @@ export function CalendarPage() {
   // Load branches and selected branch from localStorage on mount
   useEffect(() => {
     loadBranches();
-    const savedBranchId = localStorage.getItem('selectedBranchId');
-    if (savedBranchId) {
-      setSelectedBranchId(savedBranchId);
-    }
   }, []);
+
+  // When branches loaded, validate and set selected branch
+  useEffect(() => {
+    if (branches.length === 0) return;
+    
+    const savedBranchId = localStorage.getItem('selectedBranchId');
+    // Check if saved branch exists in current branches
+    const branchExists = branches.some(b => b.id === savedBranchId);
+    
+    if (savedBranchId && branchExists) {
+      setSelectedBranchId(savedBranchId);
+    } else {
+      // Use first branch and update localStorage
+      const firstBranch = branches[0];
+      setSelectedBranchId(firstBranch.id);
+      localStorage.setItem('selectedBranchId', firstBranch.id);
+    }
+  }, [branches]);
 
   const loadBranches = async () => {
     try {
@@ -867,6 +881,7 @@ export function CalendarPage() {
         appointment={selectedAppointment}
         employees={employees}
         onUpdate={loadData}
+        selectedBranchId={selectedBranchId}
       />
 
       {/* Appointment Modal */}
@@ -917,7 +932,7 @@ export function CalendarPage() {
             }
             
             // Create appointment with correct API format
-            await appointmentsApi.create({
+            const appointment = await appointmentsApi.create({
               branchId: selectedBranchId,
               masterEmployeeId: data.employeeId,
               type: 'service',
@@ -930,6 +945,17 @@ export function CalendarPage() {
                 sortOrder: index,
               })),
             });
+            
+            // Add products if any
+            if (data.products.length > 0) {
+              await appointmentsApi.addProducts(
+                appointment.id,
+                data.products.map(p => ({
+                  productId: p.productId,
+                  qty: p.qty,
+                }))
+              );
+            }
             
             // Reload appointments
             await loadData();

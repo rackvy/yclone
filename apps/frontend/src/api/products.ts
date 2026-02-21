@@ -158,3 +158,21 @@ export const stockMovementsApi = {
     return apiClient.post('/stock-movements/transfer', data);
   },
 };
+
+// Хелпер: форматировать сумму в рубли (входные данные в рублях)
+export const formatRubles = (rubles: number) => {
+  return new Intl.NumberFormat("ru-RU", {
+    style: "currency",
+    currency: "RUB",
+    minimumFractionDigits: 0,
+  }).format(rubles);
+};
+
+// Хелпер: форматировать копейки в рубли (для отчётов где данные ещё в копейках)
+export const formatKopeks = (kopeks: number) => {
+  return new Intl.NumberFormat("ru-RU", {
+    style: "currency",
+    currency: "RUB",
+    minimumFractionDigits: 0,
+  }).format(kopeks / 100);
+};

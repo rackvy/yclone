@@ -1,5 +1,7 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
+import { RolesGuard } from "../auth/guards/roles.guard";
+import { Roles } from "../common/decorators/roles.decorator";
 import { CurrentUser } from "../common/decorators/current-user.decorator";
 import { ServicesService } from "./services.service";
 import { CreateServiceDto } from "./dto/create-service.dto";
@@ -7,7 +9,7 @@ import { UpdateServiceDto } from "./dto/update-service.dto";
 
 
 @Controller("services")
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class ServicesController {
     constructor(private readonly services: ServicesService) {}
 
@@ -37,6 +39,7 @@ export class ServicesController {
     }
 
     @Post()
+    @Roles('owner', 'admin')
     create(
         @CurrentUser() user: { sub: string; companyId: string },
         @Body() dto: CreateServiceDto,
@@ -45,6 +48,7 @@ export class ServicesController {
     }
 
     @Patch(":id")
+    @Roles('owner', 'admin')
     update(
         @CurrentUser() user: { sub: string; companyId: string },
         @Param("id") id: string,
@@ -54,6 +58,7 @@ export class ServicesController {
     }
 
     @Delete(":id")
+    @Roles('owner', 'admin')
     remove(
         @CurrentUser() user: { sub: string; companyId: string },
         @Param("id") id: string,

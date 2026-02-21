@@ -3,6 +3,10 @@ import { IsBoolean, IsInt, IsOptional, IsString, Min, MinLength } from "class-va
 export class UpdateProductDto {
     @IsOptional()
     @IsString()
+    branchId?: string;
+
+    @IsOptional()
+    @IsString()
     @MinLength(2)
     name?: string;
 

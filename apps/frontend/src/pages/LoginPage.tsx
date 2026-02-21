@@ -19,7 +19,7 @@ export default function LoginPage() {
       localStorage.setItem('accessToken', response.accessToken);
       localStorage.setItem('refreshToken', response.refreshToken);
       localStorage.setItem('userEmail', email);
-      window.location.href = '/dashboard';
+      window.location.href = '/';
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Произошла ошибка при входе');
     } finally {

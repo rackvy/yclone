@@ -130,6 +130,10 @@ export class ProductsService {
         });
         if (!exists) throw new NotFoundException("Product not found");
 
+        if (dto.branchId !== undefined && dto.branchId !== exists.branchId) {
+            await this.assertBranch(companyId, dto.branchId);
+        }
+
         if (dto.categoryId !== undefined && dto.categoryId !== null) {
             await this.assertCategory(companyId, dto.categoryId);
         }
@@ -138,6 +142,7 @@ export class ProductsService {
             return await this.prisma.product.update({
                 where: { id },
                 data: {
+                    ...(dto.branchId !== undefined ? { branchId: dto.branchId } : {}),
                     ...(dto.name !== undefined ? { name: dto.name.trim() } : {}),
                     ...(dto.price !== undefined ? { price: dto.price } : {}),
                     ...(dto.stockQty !== undefined ? { stockQty: dto.stockQty } : {}),

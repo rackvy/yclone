@@ -44,6 +44,31 @@ enum AppointmentType {
   block
 }
 
+enum PaymentStatus {
+  unpaid
+  partial
+  paid
+  refunded
+}
+
+enum PaymentDirection {
+  income
+  refund
+}
+
+enum PaymentMethodType {
+  cash
+  card
+  transfer
+  other
+}
+
+enum CashboxType {
+  cash
+  bank
+  other
+}
+
 enum StockMovementType {
   in
   out
@@ -73,6 +98,12 @@ model Company {
   scheduleBlocks     WorkScheduleBlock[]
   tasks              Task[]
   notes              Note[]
+  paymentMethods     PaymentMethod[]
+  appointmentPayments AppointmentPayment[]
+  cashboxes          Cashbox[]
+  sales              Sale[]
+  salePayments       SalePayment[]
+  cashShifts         CashShift[]
 }
 
 model User {
@@ -127,11 +158,17 @@ model Branch {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  employees      Employee[]
-  appointments   Appointment[]
-  products       Product[]
-  stockMovements StockMovement[]
-  userBranches   UserBranch[]
+  employees           Employee[]
+  appointments        Appointment[]
+  products            Product[]
+  stockMovements      StockMovement[]
+  userBranches        UserBranch[]
+  paymentMethods      PaymentMethod[]
+  appointmentPayments AppointmentPayment[]
+  cashboxes           Cashbox[]
+  sales               Sale[]
+  salePayments        SalePayment[]
+  cashShifts          CashShift[]
 
   @@unique([companyId, name])
   @@index([companyId])
@@ -187,6 +224,10 @@ model Employee {
   StockMovement      StockMovement[]
   services           EmployeeService[]
   notes              Note[]
+  sales              Sale[]
+  salePayments       SalePayment[]
+  openedCashShifts   CashShift[] @relation("OpenedByEmployee")
+  closedCashShifts   CashShift[] @relation("ClosedByEmployee")
 
   @@unique([companyId, phone])
   @@unique([companyId, email])
@@ -210,6 +251,7 @@ model Client {
 
   appointments Appointment[]
   Note         Note[]
+  sales        Sale[]
 
   @@unique([companyId, phone])
   @@index([companyId])
@@ -327,6 +369,7 @@ model Product {
 
   stockMovements   StockMovement[]
   appointmentItems AppointmentProduct[]
+  saleItems        SaleItem[]
 
   @@unique([branchId, sku])
   @@unique([branchId, barcode])
@@ -353,6 +396,9 @@ model StockMovement {
   appointmentId String?
   appointment   Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
 
+  saleId String?
+  sale   Sale? @relation(fields: [saleId], references: [id], onDelete: SetNull)
+
   createdByEmployeeId String?
   createdByEmployee   Employee? @relation(fields: [createdByEmployeeId], references: [id], onDelete: SetNull)
 
@@ -362,6 +408,7 @@ model StockMovement {
   @@index([branchId])
   @@index([productId])
   @@index([appointmentId])
+  @@index([saleId])
 }
 
 model Appointment {
@@ -391,13 +438,18 @@ model Appointment {
 
   isPaid Boolean @default(false)
 
+  // Статус оплаты и суммы в копейках (1 рубль = 100 копеек)
+  paymentStatus     PaymentStatus @default(unpaid)
+  paidTotalKopeks   Int           @default(0)
+
   totalServices Int @default(0)
   totalProducts Int @default(0)
   total         Int @default(0)
 
-  services       AppointmentService[]
-  products       AppointmentProduct[]
-  stockMovements StockMovement[]
+  services            AppointmentService[]
+  products            AppointmentProduct[]
+  stockMovements      StockMovement[]
+  appointmentPayments AppointmentPayment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -405,6 +457,7 @@ model Appointment {
   @@index([companyId])
   @@index([branchId])
   @@index([masterEmployeeId])
+  @@index([paymentStatus])
   @@index([clientId])
   @@index([startAt])
 }
@@ -591,4 +644,238 @@ model Note {
   @@index([branchId])
   @@index([date])
   @@index([clientId])
+}
+
+// ============================================
+// МОДЕЛИ ПЛАТЕЖЕЙ (STAGE 1)
+// ============================================
+
+model PaymentMethod {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  branchId String?
+  branch   Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
+
+  name String
+  type PaymentMethodType // cash/card/transfer/other
+
+  isActive   Boolean @default(true)
+  sortOrder  Int     @default(100)
+
+  createdAt DateTime @default(now())
+
+  payments AppointmentPayment[]
+  salePayments SalePayment[]
+
+  @@index([companyId])
+  @@index([branchId])
+  @@index([isActive])
+}
+
+model AppointmentPayment {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  branchId String
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  appointmentId String
+  appointment   Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  methodId String
+  method   PaymentMethod @relation(fields: [methodId], references: [id], onDelete: Restrict)
+
+  cashboxId String?
+  cashbox   Cashbox? @relation(fields: [cashboxId], references: [id], onDelete: Restrict)
+
+  direction PaymentDirection // income/refund
+
+  amount Int // сумма в рублях
+
+  paidAt DateTime @default(now())
+
+  comment String?
+
+  createdByEmployeeId String?
+
+  createdAt DateTime @default(now())
+
+  @@index([companyId])
+  @@index([branchId])
+  @@index([appointmentId])
+  @@index([methodId])
+  @@index([cashboxId])
+  @@index([direction])
+  @@index([paidAt])
+}
+
+// ============================================
+// КАССЫ (STAGE 2)
+// ============================================
+
+model Cashbox {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  branchId String?
+  branch   Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
+
+  name String
+  type CashboxType // cash/bank/other
+
+  currency String @default("RUB")
+
+  isActive  Boolean @default(true)
+  sortOrder Int     @default(100)
+
+  createdAt DateTime @default(now())
+
+  payments AppointmentPayment[]
+  salePayments SalePayment[]
+
+  @@index([companyId])
+  @@index([branchId])
+  @@index([isActive])
+}
+
+// ============================================
+// ПРОДАЖИ ТОВАРОВ (STAGE 3)
+// ============================================
+
+model Sale {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  branchId String
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  clientId String?
+  client   Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+
+  totalKopeks   Int           @default(0)
+  paidTotalKopeks Int         @default(0)
+  paymentStatus PaymentStatus @default(unpaid)
+
+  items SaleItem[]
+  payments SalePayment[]
+  stockMovements StockMovement[]
+
+  createdByEmployeeId String?
+  createdByEmployee   Employee? @relation(fields: [createdByEmployeeId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId])
+  @@index([branchId])
+  @@index([clientId])
+  @@index([paymentStatus])
+  @@index([createdAt])
+}
+
+model SaleItem {
+  id        String @id @default(cuid())
+  saleId    String
+  sale      Sale   @relation(fields: [saleId], references: [id], onDelete: Cascade)
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  qty         Int
+  priceKopeks Int
+  totalKopeks Int
+
+  createdAt DateTime @default(now())
+
+  @@index([saleId])
+  @@index([productId])
+}
+
+model SalePayment {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  branchId String
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  saleId String
+  sale   Sale @relation(fields: [saleId], references: [id], onDelete: Cascade)
+
+  methodId String
+  method   PaymentMethod @relation(fields: [methodId], references: [id], onDelete: Restrict)
+
+  cashboxId String
+  cashbox   Cashbox @relation(fields: [cashboxId], references: [id], onDelete: Restrict)
+
+  direction PaymentDirection // income/refund
+
+  amount Int // сумма в рублях
+
+  paidAt DateTime @default(now())
+
+  comment String?
+
+  createdByEmployeeId String?
+  createdByEmployee   Employee? @relation(fields: [createdByEmployeeId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([companyId])
+  @@index([branchId])
+  @@index([saleId])
+  @@index([methodId])
+  @@index([cashboxId])
+  @@index([direction])
+  @@index([paidAt])
+}
+
+// ============================================
+// СМЕНЫ / ЗАКРЫТИЕ ДНЯ (STAGE 4)
+// ============================================
+
+enum CashShiftStatus {
+  open
+  closed
+}
+
+model CashShift {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  branchId String
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  date DateTime @db.Date
+
+  status CashShiftStatus @default(open)
+
+  openedAt DateTime @default(now())
+  openedByEmployeeId String?
+  openedByEmployee   Employee? @relation("OpenedByEmployee", fields: [openedByEmployeeId], references: [id], onDelete: SetNull)
+
+  closedAt DateTime?
+  closedByEmployeeId String?
+  closedByEmployee   Employee? @relation("ClosedByEmployee", fields: [closedByEmployeeId], references: [id], onDelete: SetNull)
+
+  expectedCash Int @default(0)
+  actualCash   Int?
+  diffCash     Int?
+
+  comment String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([companyId, branchId, date])
+  @@index([companyId])
+  @@index([branchId])
+  @@index([date])
+  @@index([status])
 }

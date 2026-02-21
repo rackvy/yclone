@@ -39,6 +39,8 @@ export interface Appointment {
   id: string;
   type: AppointmentType;
   status: AppointmentStatus;
+  paymentStatus?: "unpaid" | "partial" | "paid" | "refunded";
+  paidTotalKopeks?: number;
   title?: string;
   comment?: string;
   startAt: string;
@@ -102,6 +104,16 @@ export const appointmentsApi = {
   // Получить записи клиента
   listByClient: async (clientId: string): Promise<Appointment[]> => {
     return apiClient.get(`/appointments/client/${clientId}`);
+  },
+
+  // Добавить товары к записи
+  addProducts: async (id: string, products: { productId: string; qty: number }[]): Promise<Appointment> => {
+    return apiClient.post(`/appointments/${id}/products`, { items: products });
+  },
+
+  // Обновить запись (редактирование)
+  update: async (id: string, data: Partial<CreateAppointmentDto>): Promise<Appointment> => {
+    return apiClient.patch(`/appointments/${id}`, data);
   },
 };
 

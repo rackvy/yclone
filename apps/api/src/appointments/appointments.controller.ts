@@ -3,12 +3,13 @@ import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { CurrentUser } from "../common/decorators/current-user.decorator";
 import { AppointmentsService } from "./appointments.service";
 import { CreateAppointmentDto } from "./dto/create-appointment.dto";
+import { UpdateAppointmentDto } from "../appointments/dto/update-appointment.dto";
 import { AddAppointmentProductsDto } from "./dto/add-appointment-products.dto";
 import { BookAppointmentDto } from "./dto/book-appointment.dto";
 import { RescheduleAppointmentDto } from "./dto/reschedule-appointment.dto";
 import { UpdateAppointmentStatusDto } from "./dto/update-appointment-status.dto";
 
-
+ 
 @Controller("appointments")
 @UseGuards(JwtAuthGuard)
 export class AppointmentsController {
@@ -70,6 +71,16 @@ export class AppointmentsController {
         @Body() dto: UpdateAppointmentStatusDto,
     ) {
         return this.appointments.updateStatus(user.companyId, id, dto);
+    }
+
+    // PATCH /appointments/:id - общее обновление записи
+    @Patch(":id")
+    update(
+        @CurrentUser() user: { sub: string; companyId: string },
+        @Param("id") id: string,
+        @Body() dto: UpdateAppointmentDto,
+    ) {
+        return this.appointments.update(user.companyId, id, dto);
     }
 
     // GET /appointments/client/:clientId - получить все записи клиента

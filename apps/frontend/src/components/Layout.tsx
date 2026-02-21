@@ -3,6 +3,8 @@ import Link from './Link';
 import { branchesApi, Branch } from '../api/branches';
 import { employeesApi, Employee } from '../api/employees';
 import { tasksApi, Task, TaskPriority, getPriorityColor, getStatusLabel } from '../api/tasks';
+import { authApi, UserInfo, UserRole } from '../api/auth';
+import { canAccessFinance } from '../hooks/usePermissions';
 
 interface LayoutProps {
   children: ReactNode;
@@ -19,8 +21,10 @@ export default function Layout({ children }: LayoutProps) {
   });
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [isEmployeesMenuOpen, setIsEmployeesMenuOpen] = useState(false);
+  const [isReportsMenuOpen, setIsReportsMenuOpen] = useState(false);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [tasksLoading, setTasksLoading] = useState(false);
+  const [user, setUser] = useState<UserInfo | null>(null);
   
   // Task modal state
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
@@ -52,11 +56,21 @@ export default function Layout({ children }: LayoutProps) {
     return () => window.removeEventListener('openTaskModal', handleOpenTaskModal);
   }, []);
 
-  // Load branches and employees
+  // Load branches, employees and user
   useEffect(() => {
     loadBranches();
     loadEmployees();
+    loadUser();
   }, []);
+
+  const loadUser = async () => {
+    try {
+      const userData = await authApi.me();
+      setUser(userData);
+    } catch (err) {
+      console.error('Failed to load user:', err);
+    }
+  };
   
   // Reload employees when branch changes
   useEffect(() => {
@@ -119,8 +133,12 @@ export default function Layout({ children }: LayoutProps) {
   const isActive = (path: string) => currentPath === path;
 
   const handleLogout = () => {
+    // Clear all app-related localStorage items
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
+    localStorage.removeItem('userEmail');
+    localStorage.removeItem('selectedBranchId');
+    localStorage.removeItem('calendarDate');
     window.location.href = '/login';
   };
 
@@ -525,17 +543,6 @@ export default function Layout({ children }: LayoutProps) {
               <span className="material-symbols-outlined text-xl">inventory_2</span>
               <span className={`text-sm ${isActive('/products') ? 'font-semibold' : 'font-medium'}`}>Товары</span>
             </Link>
-            <Link 
-              href="/reports" 
-              className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
-                isActive('/reports') 
-                  ? 'bg-primary text-white shadow-sm' 
-                  : 'text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              <span className="material-symbols-outlined text-xl">bar_chart</span>
-              <span className={`text-sm ${isActive('/reports') ? 'font-semibold' : 'font-medium'}`}>Отчёты</span>
-            </Link>
           </nav>
 
           {/* Settings at bottom */}
@@ -551,8 +558,77 @@ export default function Layout({ children }: LayoutProps) {
               <span className="material-symbols-outlined text-xl">person</span>
               <span className="text-sm font-medium">Профиль</span>
             </Link>
+            {canAccessFinance(user?.role) && (
+              <>
+                <Link 
+                  href="/sales"
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+                    isActive('/sales')
+                      ? 'bg-primary/10 text-primary' 
+                      : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-xl">point_of_sale</span>
+                  <span className="text-sm font-medium">Продажи</span>
+                </Link>
+                <Link 
+                  href="/shifts"
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+                    isActive('/shifts')
+                      ? 'bg-primary/10 text-primary' 
+                      : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-xl">schedule</span>
+                  <span className="text-sm font-medium">Смены</span>
+                </Link>
+                {/* Раскрывающееся меню Отчёты */}
+                <div className="space-y-1">
+                  <button
+                    onClick={() => setIsReportsMenuOpen(!isReportsMenuOpen)}
+                    className={`w-full flex items-center justify-between gap-3 px-3 py-2 rounded-lg transition-colors ${
+                      isActive('/reports') || isActive('/reports/cashbox')
+                        ? 'bg-primary/10 text-primary' 
+                        : 'text-gray-600 hover:bg-gray-100'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="material-symbols-outlined text-xl">bar_chart</span>
+                      <span className="text-sm font-medium">Отчёты</span>
+                    </div>
+                    <span className={`material-symbols-outlined text-sm transition-transform ${isReportsMenuOpen ? 'rotate-180' : ''}`}>
+                      expand_more
+                    </span>
+                  </button>
+                  {isReportsMenuOpen && (
+                    <div className="pl-10 space-y-1">
+                      <Link 
+                        href="/reports"
+                        className={`block px-3 py-2 rounded-lg text-sm transition-colors ${
+                          isActive('/reports') && !isActive('/reports/cashbox')
+                            ? 'text-primary font-medium' 
+                            : 'text-gray-600 hover:text-gray-900'
+                        }`}
+                      >
+                        Финансы
+                      </Link>
+                      <Link 
+                        href="/reports/cashbox"
+                        className={`block px-3 py-2 rounded-lg text-sm transition-colors ${
+                          isActive('/reports/cashbox')
+                            ? 'text-primary font-medium' 
+                            : 'text-gray-600 hover:text-gray-900'
+                        }`}
+                      >
+                        По кассам
+                      </Link>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
             <Link 
-              href="/settings" 
+              href="/settings"
               className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
                 isActive('/settings') 
                   ? 'bg-primary/10 text-primary' 
@@ -594,7 +670,7 @@ export default function Layout({ children }: LayoutProps) {
       {/* Tasks Panel Toggle Button */}
       <button
         onClick={() => setIsTasksPanelOpen(!isTasksPanelOpen)}
-        className={`fixed top-6 z-50 size-10 bg-primary rounded-full shadow-lg flex items-center justify-center text-white ring-4 ring-white group transition-all duration-300 ${
+        className={`fixed top-12 z-50 size-10 bg-primary rounded-full shadow-lg flex items-center justify-center text-white ring-4 ring-white group transition-all duration-300 ${
           isTasksPanelOpen ? 'right-[25rem]' : 'right-6'
         }`}
       >

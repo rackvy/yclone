@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
-import { productsApi, Product } from '../api/products';
+import { productsApi, Product, formatRubles } from '../api/products';
 import { branchesApi, Branch } from '../api/branches';
 
 interface ProductFormData {
@@ -200,7 +200,7 @@ export default function ProductsPage() {
                       <p className="text-xs text-gray-500 mt-1">Артикул: {product.sku}</p>
                     )}
                     <p className="text-sm font-medium text-primary mt-1">
-                      {product.price?.toLocaleString('ru-RU')} ₽
+                      {formatRubles(product.price || 0)}
                     </p>
                   </button>
                 ))}
@@ -256,7 +256,7 @@ export default function ProductsPage() {
                     <p className="text-sm text-gray-500">Цена продажи</p>
                     <p className="text-xl font-bold text-primary">
                       {selectedProduct.price 
-                        ? `${selectedProduct.price.toLocaleString('ru-RU')} ₽` 
+                        ? formatRubles(selectedProduct.price)
                         : '—'}
                     </p>
                   </div>

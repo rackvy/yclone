@@ -1,12 +1,14 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
+import { RolesGuard } from "../auth/guards/roles.guard";
+import { Roles } from "../common/decorators/roles.decorator";
 import { CurrentUser } from "../common/decorators/current-user.decorator";
 import { EmployeesService } from "./employees.service";
 import { CreateEmployeeDto } from "./dto/create-employee.dto";
 import { UpdateEmployeeDto } from "./dto/update-employee.dto";
 
 @Controller("employees")
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class EmployeesController {
     constructor(private readonly employees: EmployeesService) {}
 
@@ -27,6 +29,7 @@ export class EmployeesController {
     }
 
     @Post()
+    @Roles('owner', 'admin')
     create(
         @CurrentUser() user: { sub: string; companyId: string },
         @Body() dto: CreateEmployeeDto,
@@ -35,6 +38,7 @@ export class EmployeesController {
     }
 
     @Patch(":id")
+    @Roles('owner', 'admin')
     update(
         @CurrentUser() user: { sub: string; companyId: string },
         @Param("id") id: string,
@@ -44,6 +48,7 @@ export class EmployeesController {
     }
 
     @Delete(":id")
+    @Roles('owner', 'admin')
     remove(
         @CurrentUser() user: { sub: string; companyId: string },
         @Param("id") id: string,
@@ -52,6 +57,7 @@ export class EmployeesController {
     }
 
     @Post(":id/terminate")
+    @Roles('owner', 'admin')
     terminate(
         @CurrentUser() user: { sub: string; companyId: string },
         @Param("id") id: string,
@@ -60,6 +66,7 @@ export class EmployeesController {
     }
 
     @Post(":id/reactivate")
+    @Roles('owner', 'admin')
     reactivate(
         @CurrentUser() user: { sub: string; companyId: string },
         @Param("id") id: string,
@@ -76,6 +83,7 @@ export class EmployeesController {
     }
 
     @Post(":id/services/:serviceId")
+    @Roles('owner', 'admin')
     addService(
         @CurrentUser() user: { sub: string; companyId: string },
         @Param("id") id: string,
@@ -85,6 +93,7 @@ export class EmployeesController {
     }
 
     @Delete(":id/services/:serviceId")
+    @Roles('owner', 'admin')
     removeService(
         @CurrentUser() user: { sub: string; companyId: string },
         @Param("id") id: string,
