@@ -176,7 +176,16 @@ export const payrollApi = {
     return apiClient.post('/api/payroll/runs', data);
   },
 
-  listRuns: (params?: { from?: string; to?: string }) => {
+  listRuns: (params?: { from?: string; to?: string }): Promise<{
+    id: string;
+    fromDate: string;
+    toDate: string;
+    status: 'draft' | 'approved';
+    createdAt: string;
+    approvedAt?: string;
+    branch?: { id: string; name: string };
+    _count: { lines: number };
+  }[]> => {
     const query = new URLSearchParams();
     if (params?.from) query.append('from', params.from);
     if (params?.to) query.append('to', params.to);

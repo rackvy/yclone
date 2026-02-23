@@ -28,7 +28,7 @@ export default function PayrollRunsPage() {
   const loadRuns = async () => {
     try {
       setLoading(true);
-      const data = await payrollApi.listRuns();
+      const data: PayrollRun[] = await payrollApi.listRuns();
       setRuns(data);
     } catch (err) {
       console.error('Failed to load runs:', err);
