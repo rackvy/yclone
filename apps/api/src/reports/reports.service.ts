@@ -31,25 +31,9 @@ export class ReportsService {
                     lte: dayEnd,
                 },
             },
-            select: {
-                direction: true,
-                amountKopeks: true,
-                cashboxId: true,
-                methodId: true,
-                cashbox: {
-                    select: {
-                        id: true,
-                        name: true,
-                        type: true,
-                    },
-                },
-                method: {
-                    select: {
-                        id: true,
-                        name: true,
-                        type: true,
-                    },
-                },
+            include: {
+                cashbox: { select: { id: true, name: true, type: true } },
+                method: { select: { id: true, name: true, type: true } },
             },
         });
 
@@ -88,7 +72,7 @@ export class ReportsService {
             }
 
             const cb = cashboxMap.get(cbId)!;
-            const amount = payment.amountKopeks;
+            const amount = payment.amount * 100; // конвертируем рубли в копейки для отчёта
 
             if (payment.direction === "income") {
                 cb.income += amount;
@@ -172,7 +156,7 @@ export class ReportsService {
                 direction: "income",
                 paidAt: { gte: fromDate, lte: toDate },
             },
-            select: { amountKopeks: true, methodId: true, cashboxId: true },
+            select: { amount: true, methodId: true, cashboxId: true },
         });
 
         // Платежи за продажи товаров (через POS)
@@ -183,7 +167,7 @@ export class ReportsService {
                 direction: "income",
                 paidAt: { gte: fromDate, lte: toDate },
             },
-            select: { amountKopeks: true, methodId: true, cashboxId: true },
+            select: { amount: true, methodId: true, cashboxId: true },
         });
 
         // Товары, проданные через записи (AppointmentProduct)
@@ -203,8 +187,8 @@ export class ReportsService {
         });
 
         // Выручка по категориям
-        const revenueServices = appointmentPayments.reduce((sum, p) => sum + p.amountKopeks, 0);
-        const revenueProductsPOS = salePayments.reduce((sum, p) => sum + p.amountKopeks, 0);
+        const revenueServices = appointmentPayments.reduce((sum, p) => sum + p.amount * 100, 0);
+        const revenueProductsPOS = salePayments.reduce((sum, p) => sum + p.amount * 100, 0);
         // price в AppointmentProduct хранится в рублях, умножаем на 100 для копеек
         const revenueProductsAppointments = appointmentProducts.reduce((sum, item) => sum + (item.price * item.qty * 100), 0);
         const revenueProducts = revenueProductsPOS + revenueProductsAppointments;
@@ -217,7 +201,7 @@ export class ReportsService {
         }
         for (const p of [...appointmentPayments, ...salePayments]) {
             const entry = methodMap.get(p.methodId);
-            if (entry) entry.amount += p.amountKopeks;
+            if (entry) entry.amount += p.amount * 100;
         }
 
         // Группировка по кассам
@@ -229,7 +213,7 @@ export class ReportsService {
         for (const p of [...appointmentPayments, ...salePayments]) {
             if (!p.cashboxId) continue;
             const entry = cashboxMap.get(p.cashboxId);
-            if (entry) entry.amount += p.amountKopeks;
+            if (entry) entry.amount += p.amount * 100;
         }
 
         return {

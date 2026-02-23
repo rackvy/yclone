@@ -104,6 +104,8 @@ model Company {
   sales              Sale[]
   salePayments       SalePayment[]
   cashShifts         CashShift[]
+  salaryRules        SalaryRule[]
+  payrollRuns        PayrollRun[]
 }
 
 model User {
@@ -169,6 +171,8 @@ model Branch {
   sales               Sale[]
   salePayments        SalePayment[]
   cashShifts          CashShift[]
+  salaryAssignments   SalaryRuleAssignment[]
+  payrollRuns         PayrollRun[]
 
   @@unique([companyId, name])
   @@index([companyId])
@@ -228,6 +232,9 @@ model Employee {
   salePayments       SalePayment[]
   openedCashShifts   CashShift[] @relation("OpenedByEmployee")
   closedCashShifts   CashShift[] @relation("ClosedByEmployee")
+  salaryAssignments  SalaryRuleAssignment[]
+  payrollRunLines    PayrollRunLine[]
+  payrollRunDetails  PayrollRunDetail[]
 
   @@unique([companyId, phone])
   @@unique([companyId, email])
@@ -266,6 +273,7 @@ model ServiceCategory {
   sort Int    @default(100)
 
   services Service[]
+  salaryOverrides SalaryRuleServiceOverride[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -291,6 +299,7 @@ model Service {
   appointmentItems AppointmentService[]
   employees        EmployeeService[]
   notes            Note[]
+  salaryOverrides  SalaryRuleServiceOverride[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -340,6 +349,7 @@ model ProductCategory {
   sort Int    @default(100)
 
   products Product[]
+  salaryOverrides SalaryRuleProductOverride[]
 
   @@unique([companyId, name])
   @@index([companyId])
@@ -370,6 +380,7 @@ model Product {
   stockMovements   StockMovement[]
   appointmentItems AppointmentProduct[]
   saleItems        SaleItem[]
+  salaryOverrides  SalaryRuleProductOverride[]
 
   @@unique([branchId, sku])
   @@unique([branchId, barcode])
@@ -878,4 +889,180 @@ model CashShift {
   @@index([branchId])
   @@index([date])
   @@index([status])
+}
+
+// ==================== PAYROLL / SALARY RULES ====================
+
+enum SalaryCalcMode {
+  percent
+  fixed
+}
+
+enum SalaryMinMode {
+  none
+  daily
+  monthly
+}
+
+model SalaryRule {
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  name        String
+  isActive    Boolean  @default(true)
+  startsAt    DateTime @default(now())
+  calcByPayments Boolean @default(true)  // true = по оплатам, false = по выручке
+  includeRefunds Boolean @default(false) // учитывать возвраты
+
+  // Настройки для услуг
+  servicesMode  SalaryCalcMode @default(percent)
+  servicesValue Int            @default(0) // копейки или проценты
+
+  // Настройки для товаров
+  productsMode  SalaryCalcMode @default(percent)
+  productsValue Int            @default(0)
+
+  // Минимальная зарплата
+  minMode  SalaryMinMode @default(none)
+  minValue Int            @default(0) // копейки
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  serviceOverrides SalaryRuleServiceOverride[]
+  productOverrides SalaryRuleProductOverride[]
+  assignments      SalaryRuleAssignment[]
+
+  @@index([companyId])
+  @@index([isActive])
+}
+
+// Переопределения для конкретных услуг/категорий
+model SalaryRuleServiceOverride {
+  id     String @id @default(cuid())
+  ruleId String
+  rule   SalaryRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  serviceId   String?
+  service     Service? @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  categoryId  String?
+  category    ServiceCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  mode  SalaryCalcMode
+  value Int // копейки или проценты
+
+  @@index([ruleId])
+  @@index([serviceId])
+  @@index([categoryId])
+}
+
+// Переопределения для конкретных товаров/категорий
+model SalaryRuleProductOverride {
+  id     String @id @default(cuid())
+  ruleId String
+  rule   SalaryRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  productId  String?
+  product    Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  categoryId String?
+  category   ProductCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  mode  SalaryCalcMode
+  value Int
+
+  @@index([ruleId])
+  @@index([productId])
+  @@index([categoryId])
+}
+
+// Назначение правила сотруднику
+model SalaryRuleAssignment {
+  id     String @id @default(cuid())
+  ruleId String
+  rule   SalaryRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  branchId String? // nullable = все филиалы
+  branch   Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
+
+  startsAt DateTime @default(now()) // с какой даты действует
+
+  createdAt DateTime @default(now())
+
+  @@index([ruleId])
+  @@index([employeeId])
+  @@index([branchId])
+  @@index([startsAt])
+}
+
+enum PayrollRunStatus {
+  draft
+  approved
+}
+
+// Запуск расчёта зарплаты (снапшот)
+model PayrollRun {
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  branchId String? // null = все филиалы
+  branch   Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
+
+  fromDate DateTime
+  toDate   DateTime
+
+  status PayrollRunStatus @default(draft)
+
+  createdAt DateTime @default(now())
+  approvedAt DateTime?
+  approvedByUserId String?
+
+  lines   PayrollRunLine[]
+  details PayrollRunDetail[]
+
+  @@index([companyId])
+  @@index([branchId])
+  @@index([fromDate])
+  @@index([toDate])
+  @@index([status])
+}
+
+// Строка расчёта по сотруднику
+model PayrollRunLine {
+  id     String @id @default(cuid())
+  runId  String
+  run    PayrollRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  workDaysCount      Int
+  servicesKopeks     Int
+  productsKopeks     Int
+  bonusKopeks        Int
+  minimumTopUpKopeks Int
+  totalKopeks        Int
+
+  @@index([runId])
+  @@index([employeeId])
+}
+
+// Детали расчёта (JSON)
+model PayrollRunDetail {
+  id     String @id @default(cuid())
+  runId  String
+  run    PayrollRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  payload Json // сериализованные детали услуг, товаров, возвратов
+
+  @@index([runId])
+  @@index([employeeId])
 }

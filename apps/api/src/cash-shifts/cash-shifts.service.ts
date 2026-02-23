@@ -101,7 +101,7 @@ export class CashShiftsService {
                     },
                     methodId: { in: cashMethodIds },
                 },
-                _sum: { amountKopeks: true },
+                _sum: { amount: true },
             });
 
             const salePayments = await this.prisma.salePayment.aggregate({
@@ -115,10 +115,10 @@ export class CashShiftsService {
                     },
                     methodId: { in: cashMethodIds },
                 },
-                _sum: { amountKopeks: true },
+                _sum: { amount: true },
             });
 
-            expectedCash = (appointmentPayments._sum.amountKopeks || 0) + (salePayments._sum.amountKopeks || 0);
+            expectedCash = ((appointmentPayments._sum?.amount || 0) + (salePayments._sum?.amount || 0)) * 100;
         }
 
         const diffCash = dto.actualCash - expectedCash;

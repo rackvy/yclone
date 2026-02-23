@@ -163,7 +163,7 @@ export class SalesService {
                     methodId: dto.methodId,
                     cashboxId: dto.cashboxId,
                     direction: "income",
-                    amountKopeks: dto.amountKopeks,
+                    amount: dto.amountKopeks,
                     comment: dto.comment,
                     createdByEmployeeId: employeeId,
                 },
@@ -173,7 +173,7 @@ export class SalesService {
             const allPayments = await tx.salePayment.findMany({
                 where: { saleId, direction: "income" },
             });
-            const paidTotal = allPayments.reduce((sum, p) => sum + p.amountKopeks, 0);
+            const paidTotal = allPayments.reduce((sum, p) => sum + p.amount, 0);
 
             // Определяем статус оплаты
             let paymentStatus = sale.paymentStatus;

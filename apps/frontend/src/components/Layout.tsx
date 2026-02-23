@@ -622,6 +622,36 @@ export default function Layout({ children }: LayoutProps) {
                       >
                         По кассам
                       </Link>
+                      <Link 
+                        href="/payroll"
+                        className={`block px-3 py-2 rounded-lg text-sm transition-colors ${
+                          isActive('/payroll')
+                            ? 'text-primary font-medium' 
+                            : 'text-gray-600 hover:text-gray-900'
+                        }`}
+                      >
+                        Правила ЗП
+                      </Link>
+                      <Link 
+                        href="/payroll/calc"
+                        className={`block px-3 py-2 rounded-lg text-sm transition-colors ${
+                          isActive('/payroll/calc')
+                            ? 'text-primary font-medium' 
+                            : 'text-gray-600 hover:text-gray-900'
+                        }`}
+                      >
+                        Расчёт ЗП
+                      </Link>
+                      <Link 
+                        href="/payroll/runs"
+                        className={`block px-3 py-2 rounded-lg text-sm transition-colors ${
+                          isActive('/payroll/runs')
+                            ? 'text-primary font-medium' 
+                            : 'text-gray-600 hover:text-gray-900'
+                        }`}
+                      >
+                        Ведомости
+                      </Link>
                     </div>
                   )}
                 </div>

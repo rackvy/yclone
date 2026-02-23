@@ -24,6 +24,7 @@ import { CashboxesModule } from './cashboxes/cashboxes.module';
 import { ReportsModule } from "./reports/reports.module";
 import { SalesModule } from './sales/sales.module';
 import { CashShiftsModule } from './cash-shifts/cash-shifts.module';
+import { PayrollModule } from './payroll/payroll.module';
 
 @Module({
     imports: [
@@ -52,6 +53,7 @@ import { CashShiftsModule } from './cash-shifts/cash-shifts.module';
         ReportsModule,
         SalesModule,
         CashShiftsModule,
+        PayrollModule,
     ],
 })
 export class AppModule {}

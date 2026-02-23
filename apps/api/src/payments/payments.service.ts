@@ -78,7 +78,7 @@ export class PaymentsService {
                 methodId: dto.methodId,
                 cashboxId: dto.cashboxId,
                 direction: "income",
-                amountKopeks: dto.amountKopeks,
+                amount: dto.amountKopeks,
                 comment: dto.comment,
                 createdByEmployeeId,
             },
@@ -130,7 +130,7 @@ export class PaymentsService {
         }
 
         // Проверяем что возврат не превышает оплаченное
-        if (dto.amountKopeks > appointment.paidTotalKopeks) {
+        if (dto.amountKopeks > (appointment.paidTotalKopeks || 0)) {
             throw new BadRequestException("Сумма возврата не может превышать оплаченную сумму");
         }
 
@@ -143,7 +143,7 @@ export class PaymentsService {
                 methodId: dto.methodId,
                 cashboxId: dto.cashboxId,
                 direction: "refund",
-                amountKopeks: dto.amountKopeks,
+                amount: dto.amountKopeks,
                 comment: dto.comment,
                 createdByEmployeeId,
             },
@@ -173,7 +173,7 @@ export class PaymentsService {
             select: {
                 id: true,
                 direction: true,
-                amountKopeks: true,
+                amount: true,
                 paidAt: true,
                 comment: true,
                 method: {
@@ -199,16 +199,16 @@ export class PaymentsService {
         // Получаем все платежи записи
         const payments = await this.prisma.appointmentPayment.findMany({
             where: { appointmentId },
-            select: { direction: true, amountKopeks: true },
+            select: { direction: true, amount: true },
         });
 
         // Считаем суммы
         const income = payments
             .filter(p => p.direction === "income")
-            .reduce((sum, p) => sum + p.amountKopeks, 0);
+            .reduce((sum, p) => sum + p.amount, 0);
         const refunds = payments
             .filter(p => p.direction === "refund")
-            .reduce((sum, p) => sum + p.amountKopeks, 0);
+            .reduce((sum, p) => sum + p.amount, 0);
         const paidTotalKopeks = income - refunds;
 
         // Получаем сумму записи

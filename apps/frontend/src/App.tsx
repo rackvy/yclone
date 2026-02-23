@@ -20,6 +20,9 @@ import { CashboxReportPage } from './pages/CashboxReportPage'
 import { SalesPage } from './pages/SalesPage'
 import ShiftsPage from './pages/ShiftsPage'
 import ReportsPage from './pages/ReportsPage'
+import PayrollRulesPage from './pages/PayrollRulesPage'
+import PayrollCalcPage from './pages/PayrollCalcPage'
+import PayrollRunsPage from './pages/PayrollRunsPage'
 import ForbiddenPage from './pages/ForbiddenPage'
 import RequireFinanceAccess from './components/RequireFinanceAccess'
 import { usersApi, UserProfile } from './api/users'
@@ -146,6 +149,33 @@ function App() {
     return (
       <RequireFinanceAccess>
         <ReportsPage />
+      </RequireFinanceAccess>
+    )
+  }
+
+  // Payroll Rules (finance only)
+  if (currentPath === '/payroll') {
+    return (
+      <RequireFinanceAccess>
+        <PayrollRulesPage />
+      </RequireFinanceAccess>
+    )
+  }
+
+  // Payroll Calculation (finance only)
+  if (currentPath === '/payroll/calc') {
+    return (
+      <RequireFinanceAccess>
+        <PayrollCalcPage />
+      </RequireFinanceAccess>
+    )
+  }
+
+  // Payroll Runs (finance only)
+  if (currentPath === '/payroll/runs') {
+    return (
+      <RequireFinanceAccess>
+        <PayrollRunsPage />
       </RequireFinanceAccess>
     )
   }
