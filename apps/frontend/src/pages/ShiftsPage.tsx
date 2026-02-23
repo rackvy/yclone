@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import Layout from '../components/Layout';
-import { cashShiftsApi, CashShift, getToday, formatDateForApi } from '../api/cashShifts';
+import { cashShiftsApi, CashShift, getToday } from '../api/cashShifts';
 import { branchesApi, Branch } from '../api/branches';
 import { formatRubles } from '../api/products';
 

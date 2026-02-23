@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import Layout from "../components/Layout";
 import {
     Sale,
-    SaleItem,
     createSale,
     addSalePayment,
     getSales,
@@ -27,7 +26,7 @@ export function SalesPage() {
     const [clients, setClients] = useState<Client[]>([]);
     const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
     const [cashboxes, setCashboxes] = useState<Cashbox[]>([]);
-    const [sales, setSales] = useState<Sale[]>([]);
+    const [, setSales] = useState<Sale[]>([]);
     const [cart, setCart] = useState<CartItem[]>([]);
     const [selectedClient, setSelectedClient] = useState<string>("");
     const [searchQuery, setSearchQuery] = useState("");

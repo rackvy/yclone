@@ -3,7 +3,7 @@ import Link from './Link';
 import { branchesApi, Branch } from '../api/branches';
 import { employeesApi, Employee } from '../api/employees';
 import { tasksApi, Task, TaskPriority, getPriorityColor, getStatusLabel } from '../api/tasks';
-import { authApi, UserInfo, UserRole } from '../api/auth';
+import { authApi, UserInfo } from '../api/auth';
 import { canAccessFinance } from '../hooks/usePermissions';
 
 interface LayoutProps {

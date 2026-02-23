@@ -24,14 +24,14 @@ export function PaymentBlock({ appointment, onPaymentCreated }: PaymentBlockProp
     const [payments, setPayments] = useState<Payment[]>([]);
     const [methods, setMethods] = useState<PaymentMethod[]>([]);
     const [cashboxes, setCashboxes] = useState<Cashbox[]>([]);
-    const [loading, setLoading] = useState(false);
+    const [, setIsLoading] = useState(false);
     const [showPaymentModal, setShowPaymentModal] = useState(false);
     const [showRefundModal, setShowRefundModal] = useState(false);
 
     // Загрузка платежей, методов и касс
     const loadData = async () => {
         try {
-            setLoading(true);
+            setIsLoading(true);
             const [paymentsData, methodsData, cashboxesData] = await Promise.all([
                 getAppointmentPayments(appointment.id),
                 getPaymentMethods(),
@@ -43,7 +43,7 @@ export function PaymentBlock({ appointment, onPaymentCreated }: PaymentBlockProp
         } catch (err) {
             console.error("Failed to load payments:", err);
         } finally {
-            setLoading(false);
+            setIsLoading(false);
         }
     };
 
