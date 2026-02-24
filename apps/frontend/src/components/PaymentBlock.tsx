@@ -117,7 +117,7 @@ export function PaymentBlock({ appointment, onPaymentCreated }: PaymentBlockProp
                                     <div>
                                         <span className="font-medium">
                                             {payment.direction === "income" ? "+" : "-"}
-                                            {formatRubles(payment.amountKopeks)}
+                                            {formatRubles(payment.amount)}
                                         </span>
                                         <span className="text-gray-500 ml-2">{payment.method.name}</span>
                                     </div>

@@ -14,7 +14,7 @@ export interface PaymentMethod {
 export interface Payment {
     id: string;
     direction: PaymentDirection;
-    amountKopeks: number;
+    amount: number;
     paidAt: string;
     comment?: string;
     method: PaymentMethod;
