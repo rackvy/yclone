@@ -11,15 +11,6 @@ export default function InventoryPage() {
   const [selectedBranchId, setSelectedBranchId] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  
-  // Mass edit state
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [isMassEditOpen, setIsMassEditOpen] = useState(false);
-  const [massEditData, setMassEditData] = useState({
-    minStock: '',
-    desiredStock: '',
-  });
-  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     loadBranches();
@@ -63,51 +54,6 @@ export default function InventoryPage() {
     loadData();
   };
 
-  const toggleSelect = (id: string) => {
-    const newSet = new Set(selectedIds);
-    if (newSet.has(id)) {
-      newSet.delete(id);
-    } else {
-      newSet.add(id);
-    }
-    setSelectedIds(newSet);
-  };
-
-  const toggleSelectAll = () => {
-    if (selectedIds.size === products.length) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(products.map(p => p.id)));
-    }
-  };
-
-  const handleMassEdit = async () => {
-    if (selectedIds.size === 0) return;
-    
-    setSaving(true);
-    try {
-      const updates: Promise<any>[] = [];
-      for (const id of selectedIds) {
-        const data: any = {};
-        if (massEditData.minStock !== '') data.minStock = parseInt(massEditData.minStock);
-        if (massEditData.desiredStock !== '') data.desiredStock = parseInt(massEditData.desiredStock);
-        
-        if (Object.keys(data).length > 0) {
-          updates.push(productsApi.update(id, data));
-        }
-      }
-      await Promise.all(updates);
-      setIsMassEditOpen(false);
-      setSelectedIds(new Set());
-      setMassEditData({ minStock: '', desiredStock: '' });
-      loadData();
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Ошибка');
-    } finally {
-      setSaving(false);
-    }
-  };
-
   // Calculate totals
   const totalStock = products.reduce((sum, p) => sum + p.stockQty, 0);
   const totalCost = products.reduce((sum, p) => sum + (p.costPrice || 0) * p.stockQty, 0);
@@ -125,17 +71,8 @@ export default function InventoryPage() {
             <h1 className="text-2xl font-bold text-gray-900">Склад</h1>
             <p className="text-sm text-gray-500 mt-1">Управление остатками и инвентаризация</p>
           </div>
-          <div className="flex gap-2">
-            {selectedIds.size > 0 && (
-              <button
-                onClick={() => setIsMassEditOpen(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors"
-              >
-                <span className="material-symbols-outlined text-xl">edit</span>
-                Изменить ({selectedIds.size})
-              </button>
-            )}
-          </div>
+          {/* Actions can be added here */}
+          <div></div>
         </div>
 
         {/* Summary Cards */}
@@ -230,14 +167,6 @@ export default function InventoryPage() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-gray-200 bg-gray-50">
-                  <th className="p-3 text-left">
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.size === products.length && products.length > 0}
-                      onChange={toggleSelectAll}
-                      className="w-4 h-4 rounded border-gray-300"
-                    />
-                  </th>
                   <th className="p-3 text-left text-xs font-medium text-gray-500 uppercase">Товар</th>
                   <th className="p-3 text-left text-xs font-medium text-gray-500 uppercase">Категория</th>
                   <th className="p-3 text-right text-xs font-medium text-gray-500 uppercase">Остаток</th>
@@ -259,14 +188,6 @@ export default function InventoryPage() {
                       key={product.id}
                       className={`border-b border-gray-100 hover:bg-gray-50 ${isLowStock ? 'bg-orange-50' : ''}`}
                     >
-                      <td className="p-3">
-                        <input
-                          type="checkbox"
-                          checked={selectedIds.has(product.id)}
-                          onChange={() => toggleSelect(product.id)}
-                          className="w-4 h-4 rounded border-gray-300"
-                        />
-                      </td>
                       <td className="p-3">
                         <div className="font-medium text-gray-900">{product.name}</div>
                         {product.sku && <div className="text-xs text-gray-500">SKU: {product.sku}</div>}
@@ -299,64 +220,6 @@ export default function InventoryPage() {
           )}
         </div>
       </div>
-
-      {/* Mass Edit Modal */}
-      {isMassEditOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
-            <div className="flex items-center justify-between p-4 border-b border-gray-200">
-              <h3 className="text-lg font-bold">Массовое редактирование ({selectedIds.size} товаров)</h3>
-              <button onClick={() => setIsMassEditOpen(false)} className="text-gray-400 hover:text-gray-600">
-                <span className="material-symbols-outlined">close</span>
-              </button>
-            </div>
-
-            <div className="p-4 space-y-4">
-              <p className="text-sm text-gray-500">Оставьте поле пустым, чтобы не изменять</p>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Минимальный остаток</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={massEditData.minStock}
-                  onChange={(e) => setMassEditData({ ...massEditData, minStock: e.target.value })}
-                  placeholder="Не изменять"
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Желаемый остаток</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={massEditData.desiredStock}
-                  onChange={(e) => setMassEditData({ ...massEditData, desiredStock: e.target.value })}
-                  placeholder="Не изменять"
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 p-4 border-t border-gray-200">
-              <button
-                onClick={() => setIsMassEditOpen(false)}
-                className="px-4 py-2 text-gray-600 hover:text-gray-800"
-              >
-                Отмена
-              </button>
-              <button
-                onClick={handleMassEdit}
-                disabled={saving}
-                className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-50"
-              >
-                {saving ? 'Сохранение...' : 'Применить'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </Layout>
   );
 }

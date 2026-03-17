@@ -1466,9 +1466,14 @@ function ProductsTab() {
     sku: '',
     barcode: '',
     price: 0,
+    costPrice: 0,
     stockQty: 0,
     categoryId: '',
     isActive: true,
+    netWeight: 0,
+    grossWeight: 0,
+    minStock: 0,
+    desiredStock: 0,
   });
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState('');
@@ -1487,6 +1492,16 @@ function ProductsTab() {
   const [stockFormData, setStockFormData] = useState({ qty: 1, note: '', toBranchId: '' });
   const [stockFormLoading, setStockFormLoading] = useState(false);
   const [stockFormError, setStockFormError] = useState('');
+
+  // Mass edit state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isMassEditOpen, setIsMassEditOpen] = useState(false);
+  const [massEditData, setMassEditData] = useState({
+    minStock: '',
+    desiredStock: '',
+    costPrice: '',
+  });
+  const [massEditLoading, setMassEditLoading] = useState(false);
 
   useEffect(() => {
     loadBranches();
@@ -1562,7 +1577,7 @@ function ProductsTab() {
       await loadData();
       setIsModalOpen(false);
       setEditingProduct(null);
-      setFormData({ name: '', sku: '', barcode: '', price: 0, stockQty: 0, categoryId: '', isActive: true });
+      setFormData({ name: '', sku: '', barcode: '', price: 0, costPrice: 0, stockQty: 0, categoryId: '', isActive: true, netWeight: 0, grossWeight: 0, minStock: 0, desiredStock: 0 });
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Ошибка сохранения');
     } finally {
@@ -1582,7 +1597,7 @@ function ProductsTab() {
 
   const openCreate = () => {
     setEditingProduct(null);
-    setFormData({ name: '', sku: '', barcode: '', price: 0, stockQty: 0, categoryId: '', isActive: true });
+    setFormData({ name: '', sku: '', barcode: '', price: 0, costPrice: 0, stockQty: 0, categoryId: '', isActive: true, netWeight: 0, grossWeight: 0, minStock: 0, desiredStock: 0 });
     setFormError('');
     setIsModalOpen(true);
   };
@@ -1594,9 +1609,14 @@ function ProductsTab() {
       sku: product.sku || '',
       barcode: product.barcode || '',
       price: product.price,
+      costPrice: product.costPrice || 0,
       stockQty: product.stockQty,
       categoryId: product.categoryId || '',
       isActive: product.isActive,
+      netWeight: product.netWeight || 0,
+      grossWeight: product.grossWeight || 0,
+      minStock: product.minStock || 0,
+      desiredStock: product.desiredStock || 0,
     });
     setFormError('');
     setIsModalOpen(true);
@@ -1708,6 +1728,53 @@ function ProductsTab() {
     }
   };
 
+  // Mass edit handlers
+  const toggleSelect = (id: string) => {
+    const newSet = new Set(selectedIds);
+    if (newSet.has(id)) {
+      newSet.delete(id);
+    } else {
+      newSet.add(id);
+    }
+    setSelectedIds(newSet);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === products.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(products.map(p => p.id)));
+    }
+  };
+
+  const handleMassEdit = async () => {
+    if (selectedIds.size === 0) return;
+    
+    setMassEditLoading(true);
+    try {
+      const updates: Promise<any>[] = [];
+      for (const id of selectedIds) {
+        const data: any = {};
+        if (massEditData.minStock !== '') data.minStock = parseInt(massEditData.minStock);
+        if (massEditData.desiredStock !== '') data.desiredStock = parseInt(massEditData.desiredStock);
+        if (massEditData.costPrice !== '') data.costPrice = parseInt(massEditData.costPrice);
+        
+        if (Object.keys(data).length > 0) {
+          updates.push(productsApi.update(id, data));
+        }
+      }
+      await Promise.all(updates);
+      setIsMassEditOpen(false);
+      setSelectedIds(new Set());
+      setMassEditData({ minStock: '', desiredStock: '', costPrice: '' });
+      loadData();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Ошибка');
+    } finally {
+      setMassEditLoading(false);
+    }
+  };
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -1788,10 +1855,40 @@ function ProductsTab() {
           </button>
         </div>
       ) : (
-        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+        <>
+          {/* Mass edit bar */}
+          {selectedIds.size > 0 && (
+            <div className="mb-4 p-3 bg-primary/5 border border-primary/20 rounded-lg flex items-center justify-between">
+              <span className="text-sm font-medium">Выбрано: {selectedIds.size}</span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setIsMassEditOpen(true)}
+                  className="px-3 py-1.5 bg-primary text-white text-sm rounded-lg hover:bg-primary/90"
+                >
+                  Массовое редактирование
+                </button>
+                <button
+                  onClick={() => setSelectedIds(new Set())}
+                  className="px-3 py-1.5 bg-gray-100 text-gray-600 text-sm rounded-lg hover:bg-gray-200"
+                >
+                  Отмена
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
+                <th className="px-4 py-3 text-left">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.size === products.length && products.length > 0}
+                    onChange={toggleSelectAll}
+                    className="rounded border-gray-300 text-primary focus:ring-primary"
+                  />
+                </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Товар</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Артикул/Штрихкод</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Цена</th>
@@ -1803,6 +1900,14 @@ function ProductsTab() {
             <tbody className="divide-y divide-gray-100">
               {products.map((product) => (
                 <tr key={product.id} className="hover:bg-gray-50">
+                  <td className="px-4 py-4">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(product.id)}
+                      onChange={() => toggleSelect(product.id)}
+                      className="rounded border-gray-300 text-primary focus:ring-primary"
+                    />
+                  </td>
                   <td className="px-6 py-4">
                     <div className="font-medium">{product.name}</div>
                     {product.category && <div className="text-xs text-gray-500">{product.category.name}</div>}
@@ -1847,6 +1952,7 @@ function ProductsTab() {
             </tbody>
           </table>
         </div>
+      </>
       )}
 
       {/* Product Modal */}
@@ -1901,7 +2007,7 @@ function ProductsTab() {
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Цена (₽) *</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Цена продажи (₽) *</label>
                       <input
                         type="number"
                         min="0"
@@ -1911,12 +2017,71 @@ function ProductsTab() {
                       />
                     </div>
                     <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Закупочная цена (₽)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={formData.costPrice}
+                        onChange={(e) => setFormData({ ...formData, costPrice: parseInt(e.target.value) || 0 })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Начальный остаток</label>
                       <input
                         type="number"
                         min="0"
                         value={formData.stockQty}
                         onChange={(e) => setFormData({ ...formData, stockQty: parseInt(e.target.value) || 0 })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Критический остаток</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={formData.minStock}
+                        onChange={(e) => setFormData({ ...formData, minStock: parseInt(e.target.value) || 0 })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Желаемый остаток</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={formData.desiredStock}
+                        onChange={(e) => setFormData({ ...formData, desiredStock: parseInt(e.target.value) || 0 })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Масса нетто (г)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={formData.netWeight}
+                        onChange={(e) => setFormData({ ...formData, netWeight: parseInt(e.target.value) || 0 })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Масса брутто (г)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={formData.grossWeight}
+                        onChange={(e) => setFormData({ ...formData, grossWeight: parseInt(e.target.value) || 0 })}
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
                       />
                     </div>
@@ -2120,6 +2285,80 @@ function ProductsTab() {
                     ))}
                   </div>
                 )}
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Mass Edit Modal */}
+      {isMassEditOpen && (
+        <>
+          <div className="fixed inset-0 bg-black/50 z-40" onClick={() => setIsMassEditOpen(false)} />
+          <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+              <div className="flex items-center justify-between p-6 border-b border-gray-200">
+                <h3 className="text-lg font-bold">Массовое редактирование</h3>
+                <button onClick={() => setIsMassEditOpen(false)} className="text-gray-400 hover:text-gray-600">
+                  <span className="material-symbols-outlined">close</span>
+                </button>
+              </div>
+              <div className="p-6">
+                <p className="text-sm text-gray-500 mb-4">Выбрано товаров: {selectedIds.size}</p>
+                
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Критический остаток</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={massEditData.minStock}
+                      onChange={(e) => setMassEditData({ ...massEditData, minStock: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
+                      placeholder="Оставьте пустым чтобы не менять"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Желаемый остаток</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={massEditData.desiredStock}
+                      onChange={(e) => setMassEditData({ ...massEditData, desiredStock: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
+                      placeholder="Оставьте пустым чтобы не менять"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Закупочная цена (₽)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={massEditData.costPrice}
+                      onChange={(e) => setMassEditData({ ...massEditData, costPrice: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
+                      placeholder="Оставьте пустым чтобы не менять"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-3 mt-6">
+                  <button 
+                    type="button" 
+                    onClick={() => setIsMassEditOpen(false)} 
+                    className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium"
+                  >
+                    Отмена
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={handleMassEdit}
+                    disabled={massEditLoading}
+                    className="flex-1 px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg font-semibold shadow-sm disabled:opacity-50"
+                  >
+                    {massEditLoading ? 'Сохранение...' : 'Сохранить'}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
