@@ -19,6 +19,10 @@ export class UpdateClientDto {
     notes?: string;
 
     @IsOptional()
+    @IsString()
+    comment?: string;
+
+    @IsOptional()
     @IsDateString()
     birthDate?: string; // YYYY-MM-DD or null to clear
 

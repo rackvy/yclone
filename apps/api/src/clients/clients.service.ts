@@ -143,6 +143,7 @@ export class ClientsService {
         if (dto.phone !== undefined) data.phone = normalizePhone(dto.phone);
         if (dto.email !== undefined) data.email = dto.email?.trim() || null;
         if (dto.notes !== undefined) data.notes = dto.notes?.trim() || null;
+        if (dto.comment !== undefined) data.notes = dto.comment?.trim() || null;
         if (dto.birthDate !== undefined) data.birthDate = dto.birthDate ? new Date(dto.birthDate) : null;
         if (dto.discountPercent !== undefined) data.discountPercent = dto.discountPercent;
         if (dto.discountAppliesTo !== undefined) data.discountAppliesTo = dto.discountAppliesTo;

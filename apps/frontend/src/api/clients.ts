@@ -53,13 +53,14 @@ export interface CreateClientDto {
 
 export const clientsApi = {
   // Получить список клиентов
-  list: async (): Promise<Client[]> => {
-    return apiClient.get('/clients');
+  list: async (q?: string): Promise<Client[]> => {
+    const query = q ? `?q=${encodeURIComponent(q)}` : '';
+    return apiClient.get(`/clients${query}`);
   },
 
-  // Поиск клиентов
+  // Поиск клиентов (алиас list с q)
   search: async (query: string): Promise<Client[]> => {
-    return apiClient.get(`/clients/search?q=${encodeURIComponent(query)}`);
+    return apiClient.get(`/clients?q=${encodeURIComponent(query)}`);
   },
 
   // Получить одного клиента
