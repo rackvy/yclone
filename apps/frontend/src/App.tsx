@@ -23,6 +23,8 @@ import ReportsPage from './pages/ReportsPage'
 import PayrollRulesPage from './pages/PayrollRulesPage'
 import PayrollCalcPage from './pages/PayrollCalcPage'
 import PayrollRunsPage from './pages/PayrollRunsPage'
+import WaitlistPage from './pages/WaitlistPage'
+import InventoryPage from './pages/InventoryPage'
 import ForbiddenPage from './pages/ForbiddenPage'
 import RequireFinanceAccess from './components/RequireFinanceAccess'
 import { usersApi, UserProfile } from './api/users'
@@ -206,6 +208,16 @@ function App() {
   if (currentPath === '/clients') {
     const isMaster = user?.role === 'master'
     return isMaster ? <MasterClientsPage /> : <ClientsPage />
+  }
+
+  // Waitlist
+  if (currentPath === '/waitlist') {
+    return <WaitlistPage />
+  }
+
+  // Inventory
+  if (currentPath === '/inventory') {
+    return <InventoryPage />
   }
 
   // Employees list

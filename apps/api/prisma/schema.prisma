@@ -98,6 +98,7 @@ model Company {
   scheduleBlocks     WorkScheduleBlock[]
   tasks              Task[]
   notes              Note[]
+  waitlists          Waitlist[]
   paymentMethods     PaymentMethod[]
   appointmentPayments AppointmentPayment[]
   cashboxes          Cashbox[]
@@ -106,6 +107,8 @@ model Company {
   cashShifts         CashShift[]
   salaryRules        SalaryRule[]
   payrollRuns        PayrollRun[]
+  clientCertificates ClientCertificate[]
+  inventoryCounts    InventoryCount[]
 }
 
 model User {
@@ -156,6 +159,7 @@ model Branch {
   
   tasks Task[]
   notes Note[]
+  waitlists Waitlist[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -173,6 +177,7 @@ model Branch {
   cashShifts          CashShift[]
   salaryAssignments   SalaryRuleAssignment[]
   payrollRuns         PayrollRun[]
+  inventoryCounts     InventoryCount[]
 
   @@unique([companyId, name])
   @@index([companyId])
@@ -228,6 +233,7 @@ model Employee {
   StockMovement      StockMovement[]
   services           EmployeeService[]
   notes              Note[]
+  waitlists          Waitlist[]
   sales              Sale[]
   salePayments       SalePayment[]
   openedCashShifts   CashShift[] @relation("OpenedByEmployee")
@@ -235,6 +241,8 @@ model Employee {
   salaryAssignments  SalaryRuleAssignment[]
   payrollRunLines    PayrollRunLine[]
   payrollRunDetails  PayrollRunDetail[]
+  preferredClients   Client[] // клиенты у которых этот мастер - любимый
+  inventoryCounts    InventoryCount[] @relation("InventoryCreatedByEmployee")
 
   @@unique([companyId, phone])
   @@unique([companyId, email])
@@ -252,6 +260,17 @@ model Client {
   phone    String
   email    String?
   notes    String?
+  birthDate DateTime? // День рождения
+
+  // Лояльность - скидка
+  discountPercent Int @default(0) // скидка в процентах
+  discountAppliesTo String @default("all") // all | services | products
+
+  // Предпочтения (авто из истории)
+  preferredMasterId String? // любимый мастер
+  preferredMaster   Employee? @relation(fields: [preferredMasterId], references: [id], onDelete: SetNull)
+  preferredServiceIds String? // JSON массив ID услуг ["id1","id2","id3"]
+  preferredProductIds String? // JSON массив ID товаров
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -259,9 +278,34 @@ model Client {
   appointments Appointment[]
   Note         Note[]
   sales        Sale[]
+  certificates ClientCertificate[]
+  waitlists    Waitlist[]
 
   @@unique([companyId, phone])
   @@index([companyId])
+}
+
+// Сертификаты клиента
+model ClientCertificate {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  name   String  // название сертификата
+  amount Int     // начальная сумма в копейках
+  remaining Int  // оставшаяся сумма в копейках
+
+  isActive Boolean @default(true)
+  expiresAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([companyId])
+  @@index([clientId])
+  @@index([isActive])
 }
 
 model ServiceCategory {
@@ -299,6 +343,7 @@ model Service {
   appointmentItems AppointmentService[]
   employees        EmployeeService[]
   notes            Note[]
+  waitlists        Waitlist[]
   salaryOverrides  SalaryRuleServiceOverride[]
 
   createdAt DateTime @default(now())
@@ -369,8 +414,17 @@ model Product {
   name     String
   sku      String?
   barcode  String?
-  price    Int
+  price    Int    // Розничная цена в рублях
+  costPrice Int   @default(0) // Закупочная цена в рублях
   stockQty Int     @default(0)
+
+  // Масса
+  netWeight   Int? // Масса нетто в граммах
+  grossWeight Int? // Масса брутто в граммах
+
+  // Остатки
+  minStock     Int @default(0) // Критический остаток
+  desiredStock Int @default(0) // Желаемый остаток
 
   isActive Boolean @default(true)
 
@@ -381,6 +435,7 @@ model Product {
   appointmentItems AppointmentProduct[]
   saleItems        SaleItem[]
   salaryOverrides  SalaryRuleProductOverride[]
+  inventoryItems   InventoryCountItem[]
 
   @@unique([branchId, sku])
   @@unique([branchId, barcode])
@@ -422,6 +477,46 @@ model StockMovement {
   @@index([saleId])
 }
 
+// Инвентаризация
+model InventoryCount {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  branchId String
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  status String @default("draft") // draft | completed | canceled
+
+  createdByEmployeeId String?
+  createdByEmployee   Employee? @relation("InventoryCreatedByEmployee", fields: [createdByEmployeeId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  completedAt DateTime?
+
+  items InventoryCountItem[]
+
+  @@index([companyId])
+  @@index([branchId])
+  @@index([status])
+}
+
+model InventoryCountItem {
+  id        String  @id @default(cuid())
+  inventoryCountId String
+  inventoryCount   InventoryCount @relation(fields: [inventoryCountId], references: [id], onDelete: Cascade)
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  expectedQty Int // Ожидаемый остаток (из системы)
+  actualQty   Int // Фактический остаток
+  difference  Int // Разница (actual - expected)
+
+  @@index([inventoryCountId])
+  @@index([productId])
+}
+
 model Appointment {
   id        String  @id @default(cuid())
   companyId String
@@ -455,7 +550,13 @@ model Appointment {
 
   totalServices Int @default(0)
   totalProducts Int @default(0)
-  total         Int @default(0)
+  
+  // Скидка
+  discountPercent Int @default(0) // Процент скидки (0-100)
+  discountAmount  Int @default(0) // Фиксированная скидка в рублях
+  discountTotal   Int @default(0) // Итого скидка в рублях (вычисленная)
+  
+  total         Int @default(0) // Итого после скидки
 
   services            AppointmentService[]
   products            AppointmentProduct[]
@@ -655,6 +756,48 @@ model Note {
   @@index([branchId])
   @@index([date])
   @@index([clientId])
+}
+
+// ============================================
+// ЛИСТ ОЖИДАНИЯ (WAITLIST)
+// ============================================
+
+model Waitlist {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  branchId  String
+  branch    Branch  @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  // Клиент который ждёт
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  // Желаемая услуга (опционально)
+  serviceId String?
+  service   Service? @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+
+  // Желаемый мастер (опционально)
+  masterEmployeeId String?
+  masterEmployee   Employee? @relation(fields: [masterEmployeeId], references: [id], onDelete: SetNull)
+
+  // Желаемое время
+  preferredDate     DateTime? // Желаемая дата
+  preferredTimeFrom String?   // "HH:MM" - с какого времени
+  preferredTimeTo   String?   // "HH:MM" - до какого времени
+
+  comment String? // Комментарий
+
+  // Статус: pending | contacted | booked | canceled
+  status String @default("pending")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId])
+  @@index([branchId])
+  @@index([clientId])
+  @@index([status])
 }
 
 // ============================================

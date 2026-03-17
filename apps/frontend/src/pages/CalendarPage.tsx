@@ -940,6 +940,8 @@ export function CalendarPage() {
               startTime: data.startTime,
               clientId,
               comment: data.comment,
+              discountPercent: data.discountPercent,
+              discountAmount: data.discountAmount,
               services: data.services.map((s, index) => ({
                 serviceId: s.serviceId,
                 sortOrder: index,

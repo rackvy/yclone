@@ -10,7 +10,12 @@ export class CreateProductDto {
 
     @IsInt()
     @Min(0)
-    price!: number; // рубли
+    price!: number; // Розничная цена в рублях
+
+    @IsOptional()
+    @IsInt()
+    @Min(0)
+    costPrice?: number; // Закупочная цена в рублях
 
     @IsOptional()
     @IsInt()
@@ -32,4 +37,26 @@ export class CreateProductDto {
     @IsOptional()
     @IsBoolean()
     isActive?: boolean;
+
+    // Масса
+    @IsOptional()
+    @IsInt()
+    @Min(0)
+    netWeight?: number; // Масса нетто в граммах
+
+    @IsOptional()
+    @IsInt()
+    @Min(0)
+    grossWeight?: number; // Масса брутто в граммах
+
+    // Остатки
+    @IsOptional()
+    @IsInt()
+    @Min(0)
+    minStock?: number; // Критический остаток
+
+    @IsOptional()
+    @IsInt()
+    @Min(0)
+    desiredStock?: number; // Желаемый остаток
 }

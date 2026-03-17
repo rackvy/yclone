@@ -47,6 +47,11 @@ export interface Appointment {
   endAt: string;
   isPaid: boolean;
   total: number;
+  totalServices?: number;
+  totalProducts?: number;
+  discountPercent?: number;
+  discountAmount?: number;
+  discountTotal?: number;
   masterEmployeeId: string;
   masterEmployee: AppointmentEmployee;
   clientId: string;
@@ -67,6 +72,8 @@ export interface CreateAppointmentDto {
   isPaid?: boolean;
   services?: { serviceId: string; sortOrder?: number }[];
   blockDurationMin?: number;
+  discountPercent?: number;
+  discountAmount?: number;
 }
 
 export interface RescheduleAppointmentDto {

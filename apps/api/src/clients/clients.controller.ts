@@ -43,4 +43,40 @@ export class ClientsController {
     remove(@CurrentUser() user: { sub: string; companyId: string }, @Param("id") id: string) {
         return this.clients.remove(user.companyId, id);
     }
+
+    // ===== CERTIFICATES =====
+    @Post(":id/certificates")
+    addCertificate(
+        @CurrentUser() user: { sub: string; companyId: string },
+        @Param("id") clientId: string,
+        @Body() dto: { name: string; amount: number; expiresAt?: string },
+    ) {
+        return this.clients.addCertificate(user.companyId, clientId, dto);
+    }
+
+    @Get(":id/certificates")
+    listCertificates(
+        @CurrentUser() user: { sub: string; companyId: string },
+        @Param("id") clientId: string,
+    ) {
+        return this.clients.listCertificates(user.companyId, clientId);
+    }
+
+    @Patch("certificates/:certId")
+    updateCertificate(
+        @CurrentUser() user: { sub: string; companyId: string },
+        @Param("certId") certId: string,
+        @Body() dto: { remaining?: number; isActive?: boolean },
+    ) {
+        return this.clients.updateCertificate(user.companyId, certId, dto);
+    }
+
+    // ===== STATISTICS =====
+    @Get(":id/stats")
+    getStats(
+        @CurrentUser() user: { sub: string; companyId: string },
+        @Param("id") clientId: string,
+    ) {
+        return this.clients.getStats(user.companyId, clientId);
+    }
 }

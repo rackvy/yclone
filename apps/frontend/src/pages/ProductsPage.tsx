@@ -7,7 +7,12 @@ interface ProductFormData {
   name: string;
   sku: string;
   price: number;
+  costPrice: number;
   stockQty: number;
+  netWeight: number;
+  grossWeight: number;
+  minStock: number;
+  desiredStock: number;
 }
 
 export default function ProductsPage() {
@@ -25,7 +30,12 @@ export default function ProductsPage() {
     name: '',
     sku: '',
     price: 0,
+    costPrice: 0,
     stockQty: 0,
+    netWeight: 0,
+    grossWeight: 0,
+    minStock: 0,
+    desiredStock: 0,
   });
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -70,7 +80,12 @@ export default function ProductsPage() {
       name: '',
       sku: '',
       price: 0,
+      costPrice: 0,
       stockQty: 0,
+      netWeight: 0,
+      grossWeight: 0,
+      minStock: 0,
+      desiredStock: 0,
     });
     setFormError('');
     setIsModalOpen(true);
@@ -82,7 +97,12 @@ export default function ProductsPage() {
       name: product.name,
       sku: product.sku || '',
       price: product.price || 0,
+      costPrice: product.costPrice || 0,
       stockQty: product.stockQty || 0,
+      netWeight: product.netWeight || 0,
+      grossWeight: product.grossWeight || 0,
+      minStock: product.minStock || 0,
+      desiredStock: product.desiredStock || 0,
     });
     setFormError('');
     setIsModalOpen(true);
@@ -111,14 +131,24 @@ export default function ProductsPage() {
           name: formData.name.trim(),
           sku: formData.sku.trim() || undefined,
           price: formData.price || 0,
+          costPrice: formData.costPrice || 0,
           stockQty: formData.stockQty || 0,
+          netWeight: formData.netWeight || undefined,
+          grossWeight: formData.grossWeight || undefined,
+          minStock: formData.minStock || 0,
+          desiredStock: formData.desiredStock || 0,
         });
       } else {
         await productsApi.create({
           name: formData.name.trim(),
           sku: formData.sku.trim() || undefined,
           price: formData.price || 0,
+          costPrice: formData.costPrice || 0,
           stockQty: formData.stockQty || 0,
+          netWeight: formData.netWeight || undefined,
+          grossWeight: formData.grossWeight || undefined,
+          minStock: formData.minStock || 0,
+          desiredStock: formData.desiredStock || 0,
           branchId: savedBranchId || branches[0]?.id || '',
         });
       }
@@ -277,6 +307,44 @@ export default function ProductsPage() {
                     {selectedProduct.stockQty === 0 && (
                       <p className="text-xs text-red-500 mt-1">Нет в наличии</p>
                     )}
+                    {/* Минимальный остаток */}
+                    {selectedProduct.minStock > 0 && selectedProduct.stockQty <= selectedProduct.minStock && (
+                      <p className="text-xs text-orange-500 mt-1">⚠️ Ниже минимального остатка ({selectedProduct.minStock} шт)</p>
+                    )}
+                  </div>
+
+                  {/* Дополнительные поля */}
+                  <div className="grid grid-cols-2 gap-3 mt-4">
+                    {selectedProduct.costPrice > 0 && (
+                      <div className="bg-gray-50 rounded-lg p-3">
+                        <p className="text-xs text-gray-500">Закуп. цена</p>
+                        <p className="text-lg font-bold">{selectedProduct.costPrice.toLocaleString()} ₽</p>
+                      </div>
+                    )}
+                    {selectedProduct.minStock > 0 && (
+                      <div className="bg-gray-50 rounded-lg p-3">
+                        <p className="text-xs text-gray-500">Мин. остаток</p>
+                        <p className="text-lg font-bold">{selectedProduct.minStock} шт</p>
+                      </div>
+                    )}
+                    {selectedProduct.desiredStock > 0 && (
+                      <div className="bg-gray-50 rounded-lg p-3">
+                        <p className="text-xs text-gray-500">Желаем. остаток</p>
+                        <p className="text-lg font-bold">{selectedProduct.desiredStock} шт</p>
+                      </div>
+                    )}
+                    {selectedProduct.netWeight && selectedProduct.netWeight > 0 && (
+                      <div className="bg-gray-50 rounded-lg p-3">
+                        <p className="text-xs text-gray-500">Масса нетто</p>
+                        <p className="text-lg font-bold">{selectedProduct.netWeight} г</p>
+                      </div>
+                    )}
+                    {selectedProduct.grossWeight && selectedProduct.grossWeight > 0 && (
+                      <div className="bg-gray-50 rounded-lg p-3">
+                        <p className="text-xs text-gray-500">Масса брутто</p>
+                        <p className="text-lg font-bold">{selectedProduct.grossWeight} г</p>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -357,6 +425,60 @@ export default function ProductsPage() {
                       min="0"
                       value={formData.stockQty}
                       onChange={(e) => setFormData({ ...formData, stockQty: parseInt(e.target.value) || 0 })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
+                    />
+                  </div>
+                </div>
+
+                {/* Дополнительные поля */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Закуп. цена (₽)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={formData.costPrice}
+                      onChange={(e) => setFormData({ ...formData, costPrice: parseInt(e.target.value) || 0 })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Мин. остаток</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={formData.minStock}
+                      onChange={(e) => setFormData({ ...formData, minStock: parseInt(e.target.value) || 0 })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Желаем. остаток</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={formData.desiredStock}
+                      onChange={(e) => setFormData({ ...formData, desiredStock: parseInt(e.target.value) || 0 })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Масса нетто (г)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={formData.netWeight}
+                      onChange={(e) => setFormData({ ...formData, netWeight: parseInt(e.target.value) || 0 })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Масса брутто (г)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={formData.grossWeight}
+                      onChange={(e) => setFormData({ ...formData, grossWeight: parseInt(e.target.value) || 0 })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
                     />
                   </div>

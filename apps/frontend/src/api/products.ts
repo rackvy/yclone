@@ -8,7 +8,12 @@ export interface Product {
   sku: string | null;
   barcode: string | null;
   price: number;
+  costPrice: number;
   stockQty: number;
+  netWeight: number | null;
+  grossWeight: number | null;
+  minStock: number;
+  desiredStock: number;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -19,22 +24,32 @@ export interface CreateProductDto {
   branchId: string;
   name: string;
   price: number;
+  costPrice?: number;
   stockQty?: number;
   sku?: string;
   barcode?: string;
   categoryId?: string;
   isActive?: boolean;
+  netWeight?: number;
+  grossWeight?: number;
+  minStock?: number;
+  desiredStock?: number;
 }
 
 export interface UpdateProductDto {
   branchId?: string;
   name?: string;
   price?: number;
+  costPrice?: number;
   stockQty?: number;
   sku?: string;
   barcode?: string;
   categoryId?: string;
   isActive?: boolean;
+  netWeight?: number;
+  grossWeight?: number;
+  minStock?: number;
+  desiredStock?: number;
 }
 
 export const productsApi = {

@@ -61,22 +61,42 @@ export class AppointmentsService {
 
         const totalServices = servicesSum._sum.price ?? 0;
         const totalProducts = productsSum._sum.total ?? 0;
-        const total = totalServices + totalProducts;
+        const subtotal = totalServices + totalProducts;
+
+        // Получаем текущую скидку записи
+        const appt = await tx.appointment.findUnique({
+            where: { id: appointmentId },
+            select: { discountPercent: true, discountAmount: true },
+        });
+
+        const discountPercent = appt?.discountPercent ?? 0;
+        const discountAmount = appt?.discountAmount ?? 0;
+
+        // Расчёт итоговой скидки
+        let discountTotal = 0;
+        if (discountPercent > 0) {
+            discountTotal = Math.round(subtotal * discountPercent / 100);
+        }
+        discountTotal += discountAmount;
+
+        // Итого после скидки (не может быть меньше 0)
+        const total = Math.max(0, subtotal - discountTotal);
 
         await tx.appointment.update({
             where: { id: appointmentId },
-            data: { totalServices, totalProducts, total },
+            data: { totalServices, totalProducts, discountTotal, total },
         });
 
-        return { totalServices, totalProducts, total };
+        return { totalServices, totalProducts, discountTotal, total };
     }
 
     private async assertClient(companyId: string, clientId: string) {
         const c = await this.prisma.client.findFirst({
             where: { id: clientId, companyId },
-            select: { id: true },
+            select: { id: true, discountPercent: true, discountAppliesTo: true },
         });
         if (!c) throw new BadRequestException("Client does not belong to your company");
+        return c;
     }
 
     private async ensureNoOverlap(companyId: string, masterEmployeeId: string, startAt: Date, endAt: Date) {
@@ -154,7 +174,15 @@ export class AppointmentsService {
         await this.assertBranch(companyId, dto.branchId);
         await this.assertEmployee(companyId, dto.masterEmployeeId);
 
-        if (dto.clientId) await this.assertClient(companyId, dto.clientId);
+        // Получаем данные клиента для скидки
+        let clientDiscount = { discountPercent: 0, discountAppliesTo: 'all' as string };
+        if (dto.clientId) {
+            const client = await this.assertClient(companyId, dto.clientId);
+            clientDiscount = {
+                discountPercent: client.discountPercent,
+                discountAppliesTo: client.discountAppliesTo,
+            };
+        }
 
         if (!isHHMM(dto.startTime)) throw new BadRequestException("startTime must be HH:MM");
         const dateUTC00 = parseDateYYYYMMDD(dto.date);
@@ -219,6 +247,18 @@ export class AppointmentsService {
         const isPaid = dto.isPaid ?? false;
         const totalServices = items.reduce((sum, it) => sum + it.price, 0);
 
+        // Скидка: из DTO или из карточки клиента
+        const discountPercent = dto.discountPercent ?? (clientDiscount.discountAppliesTo !== 'products' ? clientDiscount.discountPercent : 0);
+        const discountAmount = dto.discountAmount ?? 0;
+        
+        // Расчёт скидки
+        let discountTotal = 0;
+        if (discountPercent > 0) {
+            discountTotal = Math.round(totalServices * discountPercent / 100);
+        }
+        discountTotal += discountAmount;
+        const total = Math.max(0, totalServices - discountTotal);
+
         return this.prisma.$transaction(async (tx) => {
             const appt = await tx.appointment.create({
                 data: {
@@ -235,7 +275,10 @@ export class AppointmentsService {
                     isPaid,
                     totalServices,
                     totalProducts: 0,
-                    total: totalServices,
+                    discountPercent,
+                    discountAmount,
+                    discountTotal,
+                    total,
                 },
                 select: {
                     id: true,
@@ -564,13 +607,21 @@ export class AppointmentsService {
         clientId?: string;
         comment?: string;
         isPaid?: boolean;
+        discountPercent?: number;
+        discountAmount?: number;
     },
     ) {
         await this.assertBranch(companyId, dto.branchId);
         await this.assertEmployee(companyId, dto.masterEmployeeId);
 
+        // Получаем данные клиента для скидки
+        let clientDiscount = { discountPercent: 0, discountAppliesTo: 'all' as string };
         if (dto.clientId) {
-            await this.assertClient(companyId, dto.clientId);
+            const client = await this.assertClient(companyId, dto.clientId);
+            clientDiscount = {
+                discountPercent: client.discountPercent,
+                discountAppliesTo: client.discountAppliesTo,
+            };
         }
 
         if (!dto.serviceIds || dto.serviceIds.length === 0) {
@@ -616,6 +667,18 @@ export class AppointmentsService {
         const isPaid = dto.isPaid ?? false;
         const totalServices = items.reduce((sum: number, it: any) => sum + it.price, 0);
 
+        // Скидка: из DTO или из карточки клиента
+        const discountPercent = dto.discountPercent ?? (clientDiscount.discountAppliesTo !== 'products' ? clientDiscount.discountPercent : 0);
+        const discountAmount = dto.discountAmount ?? 0;
+        
+        // Расчёт скидки
+        let discountTotal = 0;
+        if (discountPercent > 0) {
+            discountTotal = Math.round(totalServices * discountPercent / 100);
+        }
+        discountTotal += discountAmount;
+        const total = Math.max(0, totalServices - discountTotal);
+
         // Создание в транзакции
         return this.prisma.$transaction(async (tx) => {
             const appt = await tx.appointment.create({
@@ -632,7 +695,10 @@ export class AppointmentsService {
                     isPaid,
                     totalServices,
                     totalProducts: 0,
-                    total: totalServices,
+                    discountPercent,
+                    discountAmount,
+                    discountTotal,
+                    total,
                 },
                 select: {
                     id: true,
@@ -899,6 +965,7 @@ export class AppointmentsService {
                 id: true,
                 status: true,
                 type: true,
+                clientId: true,
             },
         });
 
@@ -915,7 +982,7 @@ export class AppointmentsService {
             throw new BadRequestException("Block appointment can only be canceled");
         }
 
-        return this.prisma.appointment.update({
+        const updated = await this.prisma.appointment.update({
             where: { id: appointmentId },
             data: {
                 status: dto.status as any,
@@ -932,6 +999,13 @@ export class AppointmentsService {
                 updatedAt: true,
             },
         });
+
+        // При завершении записи - обновляем предпочтения клиента
+        if (dto.status === "done" && appt.clientId) {
+            await this.updateClientPreferences(appt.clientId);
+        }
+
+        return updated;
     }
 
     async update(
@@ -1092,6 +1166,77 @@ export class AppointmentsService {
                     },
                 },
             });
+        });
+    }
+
+    // Обновить предпочтения клиента
+    private async updateClientPreferences(clientId: string) {
+        // Получаем все завершённые записи клиента с мастерами и услугами
+        const appointments = await this.prisma.appointment.findMany({
+            where: {
+                clientId,
+                status: "done",
+            },
+            select: {
+                masterEmployeeId: true,
+                services: { select: { serviceId: true } },
+                products: { select: { productId: true } },
+            },
+        });
+
+        if (appointments.length === 0) return;
+
+        // Считаем какого мастера чаще посещают
+        const masterCounts = new Map<string, number>();
+        for (const a of appointments) {
+            const count = masterCounts.get(a.masterEmployeeId) || 0;
+            masterCounts.set(a.masterEmployeeId, count + 1);
+        }
+
+        // Находим мастера с максимальным количеством визитов
+        let maxCount = 0;
+        let preferredMasterId: string | null = null;
+        for (const [masterId, count] of masterCounts) {
+            if (count > maxCount) {
+                maxCount = count;
+                preferredMasterId = masterId;
+            }
+        }
+
+        // Считаем какие услуги чаще выбирают
+        const serviceCounts = new Map<string, number>();
+        for (const a of appointments) {
+            for (const s of a.services) {
+                const count = serviceCounts.get(s.serviceId) || 0;
+                serviceCounts.set(s.serviceId, count + 1);
+            }
+        }
+        const preferredServiceIds = [...serviceCounts.entries()]
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 3)
+            .map(([id]) => id);
+
+        // Считаем какие товары чаще покупают
+        const productCounts = new Map<string, number>();
+        for (const a of appointments) {
+            for (const p of a.products) {
+                const count = productCounts.get(p.productId) || 0;
+                productCounts.set(p.productId, count + 1);
+            }
+        }
+        const preferredProductIds = [...productCounts.entries()]
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 3)
+            .map(([id]) => id);
+
+        // Обновляем клиента
+        await this.prisma.client.update({
+            where: { id: clientId },
+            data: {
+                ...(preferredMasterId ? { preferredMasterId } : {}),
+                preferredServiceIds: JSON.stringify(preferredServiceIds),
+                preferredProductIds: JSON.stringify(preferredProductIds),
+            },
         });
     }
 

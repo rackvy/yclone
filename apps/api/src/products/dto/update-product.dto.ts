@@ -18,6 +18,11 @@ export class UpdateProductDto {
     @IsOptional()
     @IsInt()
     @Min(0)
+    costPrice?: number;
+
+    @IsOptional()
+    @IsInt()
+    @Min(0)
     stockQty?: number;
 
     @IsOptional()
@@ -35,4 +40,26 @@ export class UpdateProductDto {
     @IsOptional()
     @IsBoolean()
     isActive?: boolean;
+
+    // Масса
+    @IsOptional()
+    @IsInt()
+    @Min(0)
+    netWeight?: number | null;
+
+    @IsOptional()
+    @IsInt()
+    @Min(0)
+    grossWeight?: number | null;
+
+    // Остатки
+    @IsOptional()
+    @IsInt()
+    @Min(0)
+    minStock?: number;
+
+    @IsOptional()
+    @IsInt()
+    @Min(0)
+    desiredStock?: number;
 }

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
-import { clientsApi, Client } from '../api/clients';
+import { clientsApi, Client, ClientStats } from '../api/clients';
 import { appointmentsApi, Appointment, getStatusLabel, getStatusBadgeColor } from '../api/appointments';
 import { employeesApi, Employee } from '../api/employees';
 // Services loaded from appointment data directly
@@ -11,6 +11,9 @@ interface ClientFormData {
   phone: string;
   email: string;
   comment: string;
+  birthDate: string;
+  discountPercent: number;
+  discountAppliesTo: 'all' | 'services' | 'products';
 }
 
 interface AppointmentWithDetails extends Appointment {
@@ -24,12 +27,18 @@ export default function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [clientAppointments, setClientAppointments] = useState<AppointmentWithDetails[]>([]);
+  const [clientStats, setClientStats] = useState<ClientStats | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
   // Services loaded for enrichment
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<'visits' | 'activity' | 'files'>('visits');
+  const [activeTab, setActiveTab] = useState<'visits' | 'activity' | 'files' | 'certificates'>('visits');
+  
+  // Certificate modal
+  const [isCertModalOpen, setIsCertModalOpen] = useState(false);
+  const [certForm, setCertForm] = useState({ name: '', amount: '', expiresAt: '' });
+  const [certSaving, setCertSaving] = useState(false);
   
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -39,6 +48,9 @@ export default function ClientsPage() {
     phone: '',
     email: '',
     comment: '',
+    birthDate: '',
+    discountPercent: 0,
+    discountAppliesTo: 'all',
   });
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -73,8 +85,13 @@ export default function ClientsPage() {
 
   async function selectClient(client: Client) {
     setSelectedClient(client);
+    setClientStats(null);
     try {
-      const appointments = await appointmentsApi.listByClient(client.id);
+      // Загружаем записи и статистику параллельно
+      const [appointments, stats] = await Promise.all([
+        appointmentsApi.listByClient(client.id),
+        clientsApi.getStats(client.id),
+      ]);
       // Enrich appointments with master and service names
       const enriched = appointments.map(app => ({
         ...app,
@@ -82,9 +99,11 @@ export default function ClientsPage() {
         serviceName: app.services?.[0]?.service?.name || 'Услуга',
       }));
       setClientAppointments(enriched);
+      setClientStats(stats);
     } catch (err) {
-      console.error('Failed to load client appointments:', err);
+      console.error('Failed to load client data:', err);
       setClientAppointments([]);
+      setClientStats(null);
     }
   }
 
@@ -94,18 +113,9 @@ export default function ClientsPage() {
     client.email?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Calculate stats
-  const getTotalSpent = () => {
-    return clientAppointments
-      .filter(a => a.status === 'done' || a.status === 'confirmed')
-      .reduce((sum, a) => sum + (a.total || 0), 0);
-  };
-
-  const getVisitsCount = () => clientAppointments.length;
-
   const openModal = () => {
     setEditingClient(null);
-    setFormData({ fullName: '', phone: '', email: '', comment: '' });
+    setFormData({ fullName: '', phone: '', email: '', comment: '', birthDate: '', discountPercent: 0, discountAppliesTo: 'all' });
     setFormError('');
     setIsModalOpen(true);
   };
@@ -117,6 +127,9 @@ export default function ClientsPage() {
       phone: client.phone || '',
       email: client.email || '',
       comment: client.comment || '',
+      birthDate: client.birthDate ? client.birthDate.slice(0, 10) : '',
+      discountPercent: client.discountPercent || 0,
+      discountAppliesTo: client.discountAppliesTo || 'all',
     });
     setFormError('');
     setIsModalOpen(true);
@@ -150,6 +163,43 @@ export default function ClientsPage() {
       setFormError(err instanceof Error ? err.message : 'Ошибка сохранения');
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Certificate functions
+  const handleAddCertificate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedClient || !certForm.name.trim() || !certForm.amount) return;
+    
+    setCertSaving(true);
+    try {
+      await clientsApi.addCertificate(selectedClient.id, {
+        name: certForm.name.trim(),
+        amount: parseInt(certForm.amount),
+        expiresAt: certForm.expiresAt || undefined,
+      });
+      // Перезагрузим клиента чтобы обновить сертификаты
+      const updatedClient = await clientsApi.get(selectedClient.id);
+      setSelectedClient(updatedClient);
+      setIsCertModalOpen(false);
+      setCertForm({ name: '', amount: '', expiresAt: '' });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Ошибка добавления сертификата');
+    } finally {
+      setCertSaving(false);
+    }
+  };
+
+  const handleDeactivateCertificate = async (certId: string) => {
+    if (!confirm('Деактивировать сертификат?')) return;
+    try {
+      await clientsApi.updateCertificate(certId, { isActive: false });
+      if (selectedClient) {
+        const updatedClient = await clientsApi.get(selectedClient.id);
+        setSelectedClient(updatedClient);
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Ошибка');
     }
   };
 
@@ -284,22 +334,122 @@ export default function ClientsPage() {
                       <span className="material-symbols-outlined text-gray-400 text-sm">cake</span>
                       <div>
                         <p className="text-xs text-gray-500 uppercase">День рождения</p>
-                        <p className="text-sm font-medium">—</p>
+                        {selectedClient.birthDate ? (
+                          <>
+                            <p className="text-sm font-medium">
+                              {new Date(selectedClient.birthDate).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}
+                              {(() => {
+                                const today = new Date();
+                                const birth = new Date(selectedClient.birthDate!);
+                                const age = today.getFullYear() - birth.getFullYear();
+                                return <span className="text-gray-400 ml-1">({age} лет)</span>;
+                              })()}
+                            </p>
+                            {(() => {
+                              const today = new Date();
+                              const birth = new Date(selectedClient.birthDate!);
+                              const thisYearBirthday = new Date(today.getFullYear(), birth.getMonth(), birth.getDate());
+                              const diffDays = Math.ceil((thisYearBirthday.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                              if (diffDays >= 0 && diffDays <= 7) {
+                                return (
+                                  <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 bg-pink-100 text-pink-700 text-xs rounded-full">
+                                    <span className="material-symbols-outlined text-xs">celebration</span>
+                                    {diffDays === 0 ? 'Сегодня!' : `Через ${diffDays} дн.`}
+                                  </span>
+                                );
+                              }
+                              return null;
+                            })()}
+                          </>
+                        ) : (
+                          <p className="text-sm font-medium text-gray-400">—</p>
+                        )}
                       </div>
                     </div>
                   </div>
+
+                  {/* Loyalty - Discount */}
+                  {selectedClient.discountPercent > 0 && (
+                    <div className="bg-green-50 rounded-xl p-4 border border-green-200">
+                      <p className="text-xs text-gray-500 uppercase mb-1">Скидка клиента</p>
+                      <p className="text-xl font-bold text-green-700">{selectedClient.discountPercent}%</p>
+                      <p className="text-xs text-green-600">
+                        {selectedClient.discountAppliesTo === 'all' && 'На всё'}
+                        {selectedClient.discountAppliesTo === 'services' && 'На услуги'}
+                        {selectedClient.discountAppliesTo === 'products' && 'На товары'}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Preferred Master */}
+                  {selectedClient.preferredMaster && (
+                    <div className="bg-blue-50 rounded-xl p-4 border border-blue-200">
+                      <p className="text-xs text-gray-500 uppercase mb-1">Любимый мастер</p>
+                      <p className="text-lg font-bold text-blue-700">{selectedClient.preferredMaster.fullName}</p>
+                    </div>
+                  )}
+
+                  {/* Preferred Services */}
+                  {selectedClient.preferredServiceIds && (() => {
+                    try {
+                      const serviceIds = JSON.parse(selectedClient.preferredServiceIds) as string[];
+                      if (serviceIds.length > 0) {
+                        return (
+                          <div className="bg-purple-50 rounded-xl p-4 border border-purple-200">
+                            <p className="text-xs text-gray-500 uppercase mb-1">Любимые услуги</p>
+                            <p className="text-sm text-purple-700">{serviceIds.length} услуг в избранном</p>
+                          </div>
+                        );
+                      }
+                    } catch {}
+                    return null;
+                  })()}
 
                   {/* Stats */}
                   <div className="grid grid-cols-2 gap-3">
                     <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 text-center">
                       <p className="text-xs text-gray-500 uppercase mb-1">Всего потрачено</p>
-                      <p className="text-xl font-bold text-primary">{getTotalSpent().toLocaleString()} ₽</p>
+                      <p className="text-xl font-bold text-primary">{(clientStats?.totalSpent || 0).toLocaleString()} ₽</p>
                     </div>
                     <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 text-center">
                       <p className="text-xs text-gray-500 uppercase mb-1">Визитов</p>
-                      <p className="text-xl font-bold">{getVisitsCount()}</p>
+                      <p className="text-xl font-bold">{clientStats?.visitsCount || 0}</p>
+                    </div>
+                    <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 text-center">
+                      <p className="text-xs text-gray-500 uppercase mb-1">Средний чек</p>
+                      <p className="text-xl font-bold text-amber-600">{(clientStats?.avgCheck || 0).toLocaleString()} ₽</p>
+                    </div>
+                    <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200 text-center">
+                      <p className="text-xs text-gray-500 uppercase mb-1">Визитов/мес</p>
+                      <p className="text-xl font-bold">{clientStats?.visitsPerMonth || 0}</p>
                     </div>
                   </div>
+
+                  {/* Preferred Master */}
+                  {clientStats?.preferredMaster && (
+                    <div className="bg-blue-50 rounded-xl p-4 border border-blue-200">
+                      <p className="text-xs text-gray-500 uppercase mb-1">Любимый мастер</p>
+                      <p className="text-lg font-bold text-blue-700">{clientStats.preferredMaster.name}</p>
+                      <p className="text-xs text-blue-600">{clientStats.preferredMaster.count} визитов</p>
+                    </div>
+                  )}
+
+                  {/* Top Services */}
+                  {clientStats?.topServices && clientStats.topServices.length > 0 && (
+                    <div className="bg-purple-50 rounded-xl p-4 border border-purple-200">
+                      <p className="text-xs text-gray-500 uppercase mb-2">Любимые услуги</p>
+                      <div className="space-y-1">
+                        {clientStats.topServices.map((s, i) => (
+                          <div key={s.id} className="flex items-center justify-between">
+                            <span className="text-sm text-purple-700">
+                              {i + 1}. {s.name}
+                            </span>
+                            <span className="text-xs text-purple-500">{s.count} раз</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Notes - Quick Edit */}
                   <div className="bg-yellow-50 rounded-xl p-4 border border-yellow-200">
@@ -353,6 +503,21 @@ export default function ClientsPage() {
                         }`}
                       >
                         Файлы и фото
+                      </button>
+                      <button
+                        onClick={() => setActiveTab('certificates')}
+                        className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                          activeTab === 'certificates' 
+                            ? 'border-primary text-primary' 
+                            : 'border-transparent text-gray-500 hover:text-gray-700'
+                        }`}
+                      >
+                        Сертификаты
+                        {selectedClient?.certificates && selectedClient.certificates.length > 0 && (
+                          <span className="ml-1.5 px-1.5 py-0.5 text-xs bg-green-100 text-green-700 rounded-full">
+                            {selectedClient.certificates.length}
+                          </span>
+                        )}
                       </button>
                     </div>
 
@@ -443,6 +608,72 @@ export default function ClientsPage() {
                     {activeTab === 'files' && (
                       <div className="p-8 text-center text-gray-400">
                         Файлы и фото
+                      </div>
+                    )}
+
+                    {activeTab === 'certificates' && (
+                      <div className="p-4">
+                        <div className="flex items-center justify-between mb-4">
+                          <h4 className="text-sm font-medium text-gray-900">Сертификаты и абонементы</h4>
+                          <button
+                            onClick={() => setIsCertModalOpen(true)}
+                            className="flex items-center gap-1 px-3 py-1.5 bg-primary text-white text-sm rounded-lg hover:bg-primary/90 transition-colors"
+                          >
+                            <span className="material-symbols-outlined text-sm">add</span>
+                            Добавить
+                          </button>
+                        </div>
+
+                        {(!selectedClient?.certificates || selectedClient.certificates.length === 0) ? (
+                          <div className="text-center py-8 text-gray-400">
+                            <span className="material-symbols-outlined text-4xl mb-2">card_giftcard</span>
+                            <p>Нет активных сертификатов</p>
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            {selectedClient.certificates.map(cert => (
+                              <div 
+                                key={cert.id} 
+                                className={`p-4 rounded-lg border ${
+                                  cert.isActive 
+                                    ? 'bg-green-50 border-green-200' 
+                                    : 'bg-gray-50 border-gray-200 opacity-60'
+                                }`}
+                              >
+                                <div className="flex items-start justify-between">
+                                  <div>
+                                    <p className="font-medium text-gray-900">{cert.name}</p>
+                                    <p className="text-sm text-gray-600 mt-1">
+                                      Остаток: <span className="font-bold text-green-700">{cert.remaining.toLocaleString()} ₽</span>
+                                      <span className="text-gray-400"> / {cert.amount.toLocaleString()} ₽</span>
+                                    </p>
+                                    {cert.expiresAt && (
+                                      <p className="text-xs text-gray-500 mt-1">
+                                        Действует до: {new Date(cert.expiresAt).toLocaleDateString('ru-RU')}
+                                      </p>
+                                    )}
+                                  </div>
+                                  {cert.isActive && (
+                                    <button
+                                      onClick={() => handleDeactivateCertificate(cert.id)}
+                                      className="text-gray-400 hover:text-red-500 transition-colors"
+                                      title="Деактивировать"
+                                    >
+                                      <span className="material-symbols-outlined text-sm">close</span>
+                                    </button>
+                                  )}
+                                </div>
+                                {/* Progress bar */}
+                                <div className="mt-3 h-2 bg-gray-200 rounded-full overflow-hidden">
+                                  <div 
+                                    className="h-full bg-green-500 rounded-full transition-all"
+                                    style={{ width: `${Math.round((cert.remaining / cert.amount) * 100)}%` }}
+                                  />
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -541,6 +772,16 @@ export default function ClientsPage() {
                   placeholder="email@example.com"
                 />
               </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">День рождения</label>
+                <input
+                  type="date"
+                  value={formData.birthDate}
+                  onChange={(e) => setFormData({ ...formData, birthDate: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
+                />
+              </div>
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Комментарий</label>
@@ -551,6 +792,36 @@ export default function ClientsPage() {
                   rows={3}
                   placeholder="Заметки о клиенте..."
                 />
+              </div>
+
+              {/* Лояльность - Скидка */}
+              <div className="border-t pt-4 mt-4">
+                <h4 className="text-sm font-medium text-gray-900 mb-3">Лояльность</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Скидка (%)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={formData.discountPercent}
+                      onChange={(e) => setFormData({ ...formData, discountPercent: parseInt(e.target.value) || 0 })}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Применяется к</label>
+                    <select
+                      value={formData.discountAppliesTo}
+                      onChange={(e) => setFormData({ ...formData, discountAppliesTo: e.target.value as 'all' | 'services' | 'products' })}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
+                    >
+                      <option value="all">Всему</option>
+                      <option value="services">Услугам</option>
+                      <option value="products">Товарам</option>
+                    </select>
+                  </div>
+                </div>
               </div>
               
               <div className="flex gap-3 pt-4">
@@ -567,6 +838,70 @@ export default function ClientsPage() {
                   className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
                 >
                   {saving ? 'Сохранение...' : (editingClient ? 'Сохранить' : 'Создать')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Certificate Modal */}
+      {isCertModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+            <div className="flex items-center justify-between p-4 border-b border-gray-200">
+              <h3 className="text-lg font-bold">Новый сертификат</h3>
+              <button onClick={() => setIsCertModalOpen(false)} className="text-gray-400 hover:text-gray-600">
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <form onSubmit={handleAddCertificate} className="p-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Название *</label>
+                <input
+                  type="text"
+                  value={certForm.name}
+                  onChange={(e) => setCertForm({ ...certForm, name: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
+                  placeholder="Подарочный сертификат"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Сумма (₽) *</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={certForm.amount}
+                  onChange={(e) => setCertForm({ ...certForm, amount: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
+                  placeholder="5000"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Дата окончания (опционально)</label>
+                <input
+                  type="date"
+                  value={certForm.expiresAt}
+                  onChange={(e) => setCertForm({ ...certForm, expiresAt: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
+                />
+              </div>
+              <div className="flex gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setIsCertModalOpen(false)}
+                  className="flex-1 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Отмена
+                </button>
+                <button
+                  type="submit"
+                  disabled={certSaving}
+                  className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
+                >
+                  {certSaving ? 'Сохранение...' : 'Добавить'}
                 </button>
               </div>
             </form>

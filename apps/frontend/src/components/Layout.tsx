@@ -446,6 +446,17 @@ export default function Layout({ children }: LayoutProps) {
               <span className="material-symbols-outlined text-xl">group</span>
               <span className={`text-sm ${isActive('/clients') ? 'font-semibold' : 'font-medium'}`}>Клиенты</span>
             </Link>
+            <Link 
+              href="/waitlist" 
+              className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+                isActive('/waitlist') 
+                  ? 'bg-primary text-white shadow-sm' 
+                  : 'text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              <span className="material-symbols-outlined text-xl">hourglass_empty</span>
+              <span className={`text-sm ${isActive('/waitlist') ? 'font-semibold' : 'font-medium'}`}>Лист ожидания</span>
+            </Link>
             {/* Employees Dropdown Menu */}
             <div className="relative">
               <button
@@ -542,6 +553,17 @@ export default function Layout({ children }: LayoutProps) {
             >
               <span className="material-symbols-outlined text-xl">inventory_2</span>
               <span className={`text-sm ${isActive('/products') ? 'font-semibold' : 'font-medium'}`}>Товары</span>
+            </Link>
+            <Link 
+              href="/inventory" 
+              className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+                isActive('/inventory') 
+                  ? 'bg-primary text-white shadow-sm' 
+                  : 'text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              <span className="material-symbols-outlined text-xl">warehouse</span>
+              <span className={`text-sm ${isActive('/inventory') ? 'font-semibold' : 'font-medium'}`}>Склад</span>
             </Link>
           </nav>
 

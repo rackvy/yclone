@@ -45,6 +45,8 @@ export interface AppointmentFormData {
   products: AppointmentProductItem[];
   comment: string;
   addedById: string; // кто добавил товары (для статистики допродаж)
+  discountPercent: number;
+  discountAmount: number;
 }
 
 type TabType = 'services' | 'products';
@@ -71,6 +73,7 @@ export function AppointmentModal({
   const [activeTab, setActiveTab] = useState<TabType>('services');
   const [clients, setClients] = useState<Client[]>([]);
   const [employeeServices, setEmployeeServices] = useState<Service[]>([]);
+  const [allServices, setAllServices] = useState<Service[]>([]);
   const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [, setLoading] = useState(false);
   
@@ -88,6 +91,8 @@ export function AppointmentModal({
     products: [],
     comment: '',
     addedById: '',
+    discountPercent: 0,
+    discountAmount: 0,
   });
   
   // Update form when modal opens with selected employee/time
@@ -160,8 +165,9 @@ export function AppointmentModal({
       // Load employee's specific services
       const empServices = await employeesApi.getServices(employeeId);
       // Get full service details for each
-      const allServices = await servicesApi.list();
-      const filtered = allServices.filter(s => 
+      const services = await servicesApi.list();
+      setAllServices(services); // Save all services for auto-fill
+      const filtered = services.filter(s => 
         empServices.some((es: { id: string }) => es.id === s.id)
       );
       setEmployeeServices(filtered);
@@ -199,15 +205,48 @@ export function AppointmentModal({
   // Calculate totals
   const servicesTotal = formData.services.reduce((sum, s) => sum + s.price, 0);
   const productsTotal = formData.products.reduce((sum, p) => sum + p.price * p.qty, 0);
-  const total = servicesTotal + productsTotal;
+  const subtotal = servicesTotal + productsTotal;
+  
+  // Расчёт скидки
+  let discountTotal = 0;
+  if (formData.discountPercent > 0) {
+    discountTotal = Math.round(subtotal * formData.discountPercent / 100);
+  }
+  discountTotal += formData.discountAmount;
+  const total = Math.max(0, subtotal - discountTotal);
 
   const handleSelectClient = (client: Client) => {
+    // Parse preferred services
+    let preferredServices: { serviceId: string; name: string; durationMin: number; price: number }[] = [];
+    if (client.preferredServiceIds) {
+      try {
+        const serviceIds = JSON.parse(client.preferredServiceIds) as string[];
+        // Find services from allServices
+        preferredServices = serviceIds
+          .map(id => allServices.find(s => s.id === id))
+          .filter((s): s is Service => !!s)
+          .slice(0, 3) // Max 3 services
+          .map(s => ({
+            serviceId: s.id,
+            name: s.name,
+            durationMin: s.durationMin,
+            price: s.pricesByRank?.[0]?.price || 0,
+          }));
+      } catch {}
+    }
+
     setFormData(prev => ({
       ...prev,
       clientId: client.id,
       clientName: client.fullName,
       clientPhone: client.phone || '',
       clientEmail: client.email || '',
+      // Автозаполнение скидки из карточки клиента
+      discountPercent: client.discountPercent || 0,
+      // Автозаполнение предпочтительного мастера (если ещё не выбран)
+      employeeId: prev.employeeId || client.preferredMasterId || '',
+      // Автозаполнение предпочтительных услуг (если ещё не добавлены)
+      services: prev.services.length > 0 ? prev.services : preferredServices,
     }));
     setClientSearch('');
     setShowClientResults(false);
@@ -613,12 +652,41 @@ export function AppointmentModal({
                 )}
               </div>
 
-              {/* Total */}
-              <div className="border-t border-gray-200 pt-4 mt-4">
+              {/* Discount & Total */}
+              <div className="border-t border-gray-200 pt-4 mt-4 space-y-3">
+                {/* Скидка */}
+                <div className="flex items-center gap-3">
+                  <div className="flex-1">
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Скидка %</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={formData.discountPercent}
+                      onChange={(e) => setFormData(prev => ({ ...prev, discountPercent: parseInt(e.target.value) || 0 }))}
+                      className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Скидка ₽</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={formData.discountAmount}
+                      onChange={(e) => setFormData(prev => ({ ...prev, discountAmount: parseInt(e.target.value) || 0 }))}
+                      className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
+                    />
+                  </div>
+                </div>
+
+                {/* Итого */}
                 <div className="flex justify-between items-center">
                   <div className="text-sm">
                     <span className="text-gray-500">Итого:</span>
                     <span className="ml-2 text-xl font-bold">{formatRubles(total)}</span>
+                    {discountTotal > 0 && (
+                      <span className="ml-2 text-sm text-green-600">(-{formatRubles(discountTotal)})</span>
+                    )}
                   </div>
                   <div className="text-xs text-gray-400">
                     {formData.services.length > 0 && `Услуги: ${formatRubles(servicesTotal)}`}

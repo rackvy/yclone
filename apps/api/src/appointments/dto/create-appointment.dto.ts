@@ -1,4 +1,4 @@
-import { IsBoolean, IsEnum, IsInt, IsOptional, IsString, Min } from "class-validator";
+import { IsBoolean, IsEnum, IsInt, IsOptional, IsString, Min, Max } from "class-validator";
 
 export enum AppointmentTypeDto {
     service = "service",
@@ -61,4 +61,16 @@ export class CreateAppointmentDto {
     @IsInt()
     @Min(15)
     blockDurationMin?: number;
+
+    // Скидка
+    @IsOptional()
+    @IsInt()
+    @Min(0)
+    @Max(100)
+    discountPercent?: number;
+
+    @IsOptional()
+    @IsInt()
+    @Min(0)
+    discountAmount?: number;
 }

@@ -531,6 +531,16 @@ export function AppointmentDetailModal({
 
               {/* Total */}
               <div className="mt-auto pt-4 border-t border-gray-200">
+                {/* Скидка */}
+                {(appointment.discountPercent || appointment.discountAmount || appointment.discountTotal) && appointment.discountTotal! > 0 && (
+                  <div className="flex items-center justify-between text-sm text-green-600 mb-2">
+                    <span>Скидка
+                      {appointment.discountPercent ? ` ${appointment.discountPercent}%` : ''}
+                      {appointment.discountAmount ? ` + ${formatRubles(appointment.discountAmount)}` : ''}
+                    </span>
+                    <span>-{formatRubles(appointment.discountTotal!)}</span>
+                  </div>
+                )}
                 <div className="flex items-center justify-between">
                   <span className="text-gray-600">Итого</span>
                   <span className="text-2xl font-bold">{formatRubles(appointment.total)}</span>
