@@ -657,49 +657,31 @@ export default function Layout({ children }: LayoutProps) {
             )}
           </nav>
 
-          {/* Settings at bottom */}
-          <div className="mt-auto border-t border-gray-100 pt-4 space-y-1">
-            <Link 
-              href="/profile" 
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
-                isActive('/profile') 
-                  ? 'bg-primary/10 text-primary' 
-                  : 'text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              <span className="material-symbols-outlined text-xl">person</span>
-              <span className="text-sm font-medium">Профиль</span>
-            </Link>
-            <Link 
-              href="/settings"
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
-                isActive('/settings') 
-                  ? 'bg-primary/10 text-primary' 
-                  : 'text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              <span className="material-symbols-outlined text-xl">settings</span>
-              <span className="text-sm font-medium">Настройки</span>
-            </Link>
-            <button 
-              onClick={handleLogout}
-              className="w-full flex items-center gap-3 px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-            >
-              <span className="material-symbols-outlined text-xl">logout</span>
-              <span className="text-sm font-medium">Выйти</span>
-            </button>
-            
-            {/* Footer */}
-            <div className="border-t border-gray-100 pt-3 mt-2 text-[11px] text-center text-gray-500">
-              <div className="mb-1">Powered by e-RMA</div>
-              <a 
-                href="https://e-rma.ru/" 
-                target="_blank" 
-                rel="noreferrer" 
-                className="text-blue-600 hover:text-blue-700 no-underline"
-              >
-                https://e-rma.ru/
-              </a>
+          {/* User info at bottom */}
+          <div className="mt-auto border-t border-gray-100 pt-4">
+            <div className="flex items-center justify-between px-2">
+              <div className="flex flex-col min-w-0">
+                <span className="text-sm font-semibold text-gray-900 truncate">{user?.company?.name || 'Салон'}</span>
+                <span className="text-xs text-gray-500 truncate">{user?.email || ''}</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <Link 
+                  href="/settings"
+                  className={`p-2 rounded-lg transition-colors ${
+                    isActive('/settings') 
+                      ? 'text-primary bg-primary/10' 
+                      : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-xl">settings</span>
+                </Link>
+                <button 
+                  onClick={handleLogout}
+                  className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                >
+                  <span className="material-symbols-outlined text-xl">logout</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
