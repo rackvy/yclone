@@ -328,31 +328,29 @@ export default function Layout({ children }: LayoutProps) {
     <div className="flex h-screen w-full overflow-hidden bg-background-light">
       {/* Sidebar */}
       <aside className="w-72 flex-shrink-0 bg-white border-r border-gray-200 flex flex-col h-full">
-        <div className="p-4 flex flex-col gap-6 h-full overflow-y-auto no-scrollbar">
-          {/* Logo */}
-          <div className="flex items-center gap-3 px-2">
-            <div className="size-9 bg-primary rounded-lg flex items-center justify-center text-white">
-              <span className="material-symbols-outlined text-xl">spa</span>
-            </div>
-            <div className="flex flex-col">
-              <h1 className="text-sm font-bold leading-tight uppercase tracking-wider">YClone CRM</h1>
-              <p className="text-[10px] text-gray-500">Управление салоном</p>
-            </div>
-          </div>
-
-          {/* Branch Selector */}
+        <div className="p-4 flex flex-col gap-4 h-full overflow-y-auto no-scrollbar">
+          {/* Branch Selector with Home Icon */}
           {branches.length > 0 && (
-            <div className="px-2">
-              <label className="block text-xs font-medium text-gray-500 mb-1.5">Филиал</label>
+            <div className="flex items-center gap-2">
               <select
                 value={selectedBranchId}
                 onChange={(e) => handleBranchChange(e.target.value)}
-                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
+                className="flex-1 px-3 py-2.5 bg-white border border-gray-200 rounded-lg text-sm font-medium focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
               >
                 {branches.map(branch => (
                   <option key={branch.id} value={branch.id}>{branch.name}</option>
                 ))}
               </select>
+              <Link 
+                href="/dashboard" 
+                className={`flex items-center justify-center size-10 rounded-lg transition-colors ${
+                  isActive('/dashboard') 
+                    ? 'bg-primary text-white' 
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                <span className="material-symbols-outlined text-xl">home</span>
+              </Link>
             </div>
           )}
 
@@ -412,18 +410,8 @@ export default function Layout({ children }: LayoutProps) {
 
           {/* Navigation Menu */}
           <nav className="flex flex-col gap-1">
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-3 mb-1">Меню</p>
-            <Link 
-              href="/dashboard" 
-              className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
-                isActive('/dashboard') 
-                  ? 'bg-primary text-white shadow-sm' 
-                  : 'text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              <span className="material-symbols-outlined text-xl">dashboard</span>
-              <span className={`text-sm ${isActive('/dashboard') ? 'font-semibold' : 'font-medium'}`}>Дашборд</span>
-            </Link>
+            {/* Основное */}
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-3 mb-1">Основное</p>
             <Link 
               href="/calendar" 
               className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
@@ -456,6 +444,47 @@ export default function Layout({ children }: LayoutProps) {
             >
               <span className="material-symbols-outlined text-xl">hourglass_empty</span>
               <span className={`text-sm ${isActive('/waitlist') ? 'font-semibold' : 'font-medium'}`}>Лист ожидания</span>
+            </Link>
+
+            {/* Продажи и склад */}
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-3 mb-1 mt-3">Продажи и склад</p>
+            {canAccessFinance(user?.role) && (
+              <Link 
+                href="/sales"
+                className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+                  isActive('/sales')
+                    ? 'bg-primary text-white shadow-sm' 
+                    : 'text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                <span className="material-symbols-outlined text-xl">point_of_sale</span>
+                <span className={`text-sm ${isActive('/sales') ? 'font-semibold' : 'font-medium'}`}>Продажи</span>
+              </Link>
+            )}
+            <Link 
+              href="/inventory" 
+              className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+                isActive('/inventory') 
+                  ? 'bg-primary text-white shadow-sm' 
+                  : 'text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              <span className="material-symbols-outlined text-xl">warehouse</span>
+              <span className={`text-sm ${isActive('/inventory') ? 'font-semibold' : 'font-medium'}`}>Склад</span>
+            </Link>
+
+            {/* Услуги и сотрудники */}
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-3 mb-1 mt-3">Услуги и сотрудники</p>
+            <Link 
+              href="/services" 
+              className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+                isActive('/services') 
+                  ? 'bg-primary text-white shadow-sm' 
+                  : 'text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              <span className="material-symbols-outlined text-xl">content_cut</span>
+              <span className={`text-sm ${isActive('/services') ? 'font-semibold' : 'font-medium'}`}>Услуги</span>
             </Link>
             {/* Employees Dropdown Menu */}
             <div className="relative">
@@ -532,43 +561,104 @@ export default function Layout({ children }: LayoutProps) {
               <span className="material-symbols-outlined text-xl">schedule</span>
               <span className={`text-sm ${isActive('/schedule') ? 'font-semibold' : 'font-medium'}`}>Расписание</span>
             </Link>
-            <Link 
-              href="/services" 
-              className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
-                isActive('/services') 
-                  ? 'bg-primary text-white shadow-sm' 
-                  : 'text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              <span className="material-symbols-outlined text-xl">content_cut</span>
-              <span className={`text-sm ${isActive('/services') ? 'font-semibold' : 'font-medium'}`}>Услуги</span>
-            </Link>
-            <Link 
-              href="/products" 
-              className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
-                isActive('/products') 
-                  ? 'bg-primary text-white shadow-sm' 
-                  : 'text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              <span className="material-symbols-outlined text-xl">inventory_2</span>
-              <span className={`text-sm ${isActive('/products') ? 'font-semibold' : 'font-medium'}`}>Товары</span>
-            </Link>
-            <Link 
-              href="/inventory" 
-              className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
-                isActive('/inventory') 
-                  ? 'bg-primary text-white shadow-sm' 
-                  : 'text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              <span className="material-symbols-outlined text-xl">warehouse</span>
-              <span className={`text-sm ${isActive('/inventory') ? 'font-semibold' : 'font-medium'}`}>Склад</span>
-            </Link>
+
+            {/* Финансы */}
+            {canAccessFinance(user?.role) && (
+              <>
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-3 mb-1 mt-3">Финансы</p>
+                <Link 
+                  href="/shifts"
+                  className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+                    isActive('/shifts')
+                      ? 'bg-primary text-white shadow-sm' 
+                      : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-xl">work_history</span>
+                  <span className={`text-sm ${isActive('/shifts') ? 'font-semibold' : 'font-medium'}`}>Смены</span>
+                </Link>
+                {/* Раскрывающееся меню Отчёты */}
+                <div className="relative">
+                  <button
+                    onClick={() => setIsReportsMenuOpen(!isReportsMenuOpen)}
+                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+                      isActive('/reports') || isActive('/reports/cashbox') || isActive('/payroll')
+                        ? 'bg-primary text-white shadow-sm' 
+                        : 'text-gray-600 hover:bg-gray-100'
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-xl">bar_chart</span>
+                    <span className={`text-sm flex-1 text-left ${isActive('/reports') || isActive('/reports/cashbox') || isActive('/payroll') ? 'font-semibold' : 'font-medium'}`}>Отчёты</span>
+                    <span className={`material-symbols-outlined text-sm transition-transform ${isReportsMenuOpen ? 'rotate-180' : ''}`}>
+                      expand_more
+                    </span>
+                  </button>
+                  {isReportsMenuOpen && (
+                    <div className="mt-1 ml-4 space-y-1">
+                      <Link 
+                        href="/reports"
+                        className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
+                          isActive('/reports') && !isActive('/reports/cashbox')
+                            ? 'bg-primary/10 text-primary' 
+                            : 'text-gray-600 hover:bg-gray-100'
+                        }`}
+                      >
+                        <span className="material-symbols-outlined text-base">account_balance</span>
+                        <span className="text-sm">Финансы</span>
+                      </Link>
+                      <Link 
+                        href="/reports/cashbox"
+                        className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
+                          isActive('/reports/cashbox')
+                            ? 'bg-primary/10 text-primary' 
+                            : 'text-gray-600 hover:bg-gray-100'
+                        }`}
+                      >
+                        <span className="material-symbols-outlined text-base">account_balance_wallet</span>
+                        <span className="text-sm">По кассам</span>
+                      </Link>
+                      <Link 
+                        href="/payroll"
+                        className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
+                          isActive('/payroll')
+                            ? 'bg-primary/10 text-primary' 
+                            : 'text-gray-600 hover:bg-gray-100'
+                        }`}
+                      >
+                        <span className="material-symbols-outlined text-base">rule</span>
+                        <span className="text-sm">Правила ЗП</span>
+                      </Link>
+                      <Link 
+                        href="/payroll/calc"
+                        className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
+                          isActive('/payroll/calc')
+                            ? 'bg-primary/10 text-primary' 
+                            : 'text-gray-600 hover:bg-gray-100'
+                        }`}
+                      >
+                        <span className="material-symbols-outlined text-base">calculate</span>
+                        <span className="text-sm">Расчёт ЗП</span>
+                      </Link>
+                      <Link 
+                        href="/payroll/runs"
+                        className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
+                          isActive('/payroll/runs')
+                            ? 'bg-primary/10 text-primary' 
+                            : 'text-gray-600 hover:bg-gray-100'
+                        }`}
+                      >
+                        <span className="material-symbols-outlined text-base">receipt_long</span>
+                        <span className="text-sm">Ведомости</span>
+                      </Link>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
           </nav>
 
           {/* Settings at bottom */}
-          <div className="mt-auto border-t border-gray-100 pt-4 space-y-2">
+          <div className="mt-auto border-t border-gray-100 pt-4 space-y-1">
             <Link 
               href="/profile" 
               className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
@@ -580,105 +670,6 @@ export default function Layout({ children }: LayoutProps) {
               <span className="material-symbols-outlined text-xl">person</span>
               <span className="text-sm font-medium">Профиль</span>
             </Link>
-            {canAccessFinance(user?.role) && (
-              <>
-                <Link 
-                  href="/sales"
-                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
-                    isActive('/sales')
-                      ? 'bg-primary/10 text-primary' 
-                      : 'text-gray-600 hover:bg-gray-100'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-xl">point_of_sale</span>
-                  <span className="text-sm font-medium">Продажи</span>
-                </Link>
-                <Link 
-                  href="/shifts"
-                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
-                    isActive('/shifts')
-                      ? 'bg-primary/10 text-primary' 
-                      : 'text-gray-600 hover:bg-gray-100'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-xl">schedule</span>
-                  <span className="text-sm font-medium">Смены</span>
-                </Link>
-                {/* Раскрывающееся меню Отчёты */}
-                <div className="space-y-1">
-                  <button
-                    onClick={() => setIsReportsMenuOpen(!isReportsMenuOpen)}
-                    className={`w-full flex items-center justify-between gap-3 px-3 py-2 rounded-lg transition-colors ${
-                      isActive('/reports') || isActive('/reports/cashbox')
-                        ? 'bg-primary/10 text-primary' 
-                        : 'text-gray-600 hover:bg-gray-100'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="material-symbols-outlined text-xl">bar_chart</span>
-                      <span className="text-sm font-medium">Отчёты</span>
-                    </div>
-                    <span className={`material-symbols-outlined text-sm transition-transform ${isReportsMenuOpen ? 'rotate-180' : ''}`}>
-                      expand_more
-                    </span>
-                  </button>
-                  {isReportsMenuOpen && (
-                    <div className="pl-10 space-y-1">
-                      <Link 
-                        href="/reports"
-                        className={`block px-3 py-2 rounded-lg text-sm transition-colors ${
-                          isActive('/reports') && !isActive('/reports/cashbox')
-                            ? 'text-primary font-medium' 
-                            : 'text-gray-600 hover:text-gray-900'
-                        }`}
-                      >
-                        Финансы
-                      </Link>
-                      <Link 
-                        href="/reports/cashbox"
-                        className={`block px-3 py-2 rounded-lg text-sm transition-colors ${
-                          isActive('/reports/cashbox')
-                            ? 'text-primary font-medium' 
-                            : 'text-gray-600 hover:text-gray-900'
-                        }`}
-                      >
-                        По кассам
-                      </Link>
-                      <Link 
-                        href="/payroll"
-                        className={`block px-3 py-2 rounded-lg text-sm transition-colors ${
-                          isActive('/payroll')
-                            ? 'text-primary font-medium' 
-                            : 'text-gray-600 hover:text-gray-900'
-                        }`}
-                      >
-                        Правила ЗП
-                      </Link>
-                      <Link 
-                        href="/payroll/calc"
-                        className={`block px-3 py-2 rounded-lg text-sm transition-colors ${
-                          isActive('/payroll/calc')
-                            ? 'text-primary font-medium' 
-                            : 'text-gray-600 hover:text-gray-900'
-                        }`}
-                      >
-                        Расчёт ЗП
-                      </Link>
-                      <Link 
-                        href="/payroll/runs"
-                        className={`block px-3 py-2 rounded-lg text-sm transition-colors ${
-                          isActive('/payroll/runs')
-                            ? 'text-primary font-medium' 
-                            : 'text-gray-600 hover:text-gray-900'
-                        }`}
-                      >
-                        Ведомости
-                      </Link>
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
             <Link 
               href="/settings"
               className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
@@ -699,7 +690,7 @@ export default function Layout({ children }: LayoutProps) {
             </button>
             
             {/* Footer */}
-            <div className="border-t border-gray-100 pt-3 text-[11px] text-center text-gray-500">
+            <div className="border-t border-gray-100 pt-3 mt-2 text-[11px] text-center text-gray-500">
               <div className="mb-1">Powered by e-RMA</div>
               <a 
                 href="https://e-rma.ru/" 
