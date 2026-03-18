@@ -583,7 +583,7 @@ export function CalendarPage() {
                 </div>
               )}
               {/* Notes column header */}
-              <div className="w-56 min-w-[14rem] border-r border-gray-200 p-3 bg-amber-50/50" style={{ marginRight: '10px' }}>
+              <div className="w-56 min-w-[14rem] border-r border-gray-200 p-3 bg-amber-50/50">
                 <div className="flex items-center gap-2">
                   <span className="material-symbols-outlined text-amber-600">sticky_note_2</span>
                   <span className="font-bold text-sm text-amber-900">Заметки</span>
