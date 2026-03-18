@@ -272,8 +272,8 @@ export function CalendarPage() {
     const endHour = parseInt(endMatch[1]) + parseInt(endMatch[2]) / 60;
     const duration = endHour - startHour;
     
-    const top = (startHour - 9) * SLOT_HEIGHT + 4; // +4 for padding
-    const height = Math.max(duration * SLOT_HEIGHT - 8, 40); // minimum 40px
+    const top = (startHour - 9) * SLOT_HEIGHT + 2; // +2 for padding
+    const height = Math.max(duration * SLOT_HEIGHT - 4, 50); // minimum 50px for better content fit
     
     return {
       top: `${top}px`,
@@ -747,41 +747,42 @@ export function CalendarPage() {
                             handleDragStart(e, app);
                           }}
                           onDragEnd={handleDragEnd}
-                          className={`absolute left-1 right-1 rounded-lg p-2 shadow-sm flex flex-col justify-between cursor-move hover:shadow-lg transition-all border-l-4 ${getStatusColor(app.status)} border border-gray-100 overflow-hidden ${isPast ? 'opacity-50 grayscale' : ''} ${draggedAppointment?.id === app.id ? 'opacity-50' : ''}`}
+                          className={`absolute left-0.5 right-0.5 rounded-md p-1.5 shadow-sm flex flex-col cursor-move hover:shadow-md transition-all border-l-3 ${getStatusColor(app.status)} border border-gray-100 ${isPast ? 'opacity-50 grayscale' : ''} ${draggedAppointment?.id === app.id ? 'opacity-50' : ''}`}
                           style={getAppointmentStyle(app)}
                         >
-                          <div className="min-w-0">
-                            {/* Client Name + Status Badge inline */}
-                            <div className="flex items-center justify-between gap-2 mb-1">
-                              <p className="text-[12px] font-bold text-gray-900 truncate leading-tight flex-1">
-                                {app.client?.fullName || app.title || 'Без имени'}
-                              </p>
-                              <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded shrink-0 ${getStatusBadgeColor(app.status)}`}>
-                                {getStatusLabel(app.status).toUpperCase()}
-                              </span>
-                            </div>
-                            {/* Phone */}
-                            {app.client?.phone && (
-                              <p className="text-[10px] text-gray-600 font-medium truncate mb-0.5">{app.client.phone}</p>
-                            )}
-                            {/* Services */}
-                            {app.services && app.services.length > 0 && (
-                              <p className="text-[10px] text-gray-500 truncate leading-tight">
-                                {app.services.map(s => s.service?.name || 'Услуга').join(', ')}
-                              </p>
-                            )}
-                          </div>
-                          {/* Time + Paid Icon */}
-                          <div className="flex justify-between items-center mt-1 pt-1 border-t border-gray-100">
-                            <span className="text-[10px] font-medium text-gray-500">
-                              {formatTime(app.startAt)} - {formatTime(app.endAt)}
+                          {/* Row 1: Name + Status */}
+                          <div className="flex items-center gap-1 min-w-0">
+                            <p className="text-[11px] font-bold text-gray-900 truncate leading-tight flex-1">
+                              {app.client?.fullName || app.title || 'Без имени'}
+                            </p>
+                            <span className={`text-[7px] font-bold px-1 py-0.5 rounded shrink-0 ${getStatusBadgeColor(app.status)}`}>
+                              {getStatusLabel(app.status).toUpperCase()}
                             </span>
-                            <div className="flex items-center gap-1">
-                              <span className="text-[10px] font-bold text-gray-700">
-                                {app.total?.toLocaleString('ru-RU')} ₽
+                          </div>
+                          
+                          {/* Row 2: Phone */}
+                          {app.client?.phone && (
+                            <p className="text-[9px] text-gray-600 truncate">{app.client.phone}</p>
+                          )}
+                          
+                          {/* Row 3: Services */}
+                          {app.services && app.services.length > 0 && (
+                            <p className="text-[9px] text-gray-500 truncate leading-tight">
+                              {app.services.map(s => s.service?.name || 'Услуга').join(', ')}
+                            </p>
+                          )}
+                          
+                          {/* Row 4: Time + Price */}
+                          <div className="flex justify-between items-center mt-auto pt-0.5 border-t border-gray-100/50">
+                            <span className="text-[9px] font-medium text-gray-500">
+                              {formatTime(app.startAt)}-{formatTime(app.endAt)}
+                            </span>
+                            <div className="flex items-center gap-0.5">
+                              <span className="text-[9px] font-bold text-gray-700">
+                                {app.total?.toLocaleString('ru-RU')}₽
                               </span>
                               {app.isPaid && (
-                                <span className="material-symbols-outlined text-[14px] text-green-600">payments</span>
+                                <span className="material-symbols-outlined text-[12px] text-green-600">payments</span>
                               )}
                             </div>
                           </div>
